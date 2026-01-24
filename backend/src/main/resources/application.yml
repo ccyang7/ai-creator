@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: ai-creator
+server:
+  port: 8200
+  servlet:
+    context-path: /api
