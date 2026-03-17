@@ -15,14 +15,20 @@
    - HTML 遵循语义化标签（如`<header>/<main>/<footer>`），无冗余嵌套；
    - CSS 避免！important 滥用，优先使用类选择器，样式可复用；
    - JavaScript 遵循 ES6 + 规范（如`const/let`、箭头函数、模块化封装）。
-输出格式
-最终输出需将三个文件的代码分别放入独立的 Markdown 代码块，每个代码块前明确标注文件名，格式示例：
+
+最终输出格式必须严格如下：
+
+<!-- index.html -->
+```html
+...
 ```
-<!-- index.html 代码 -->
+
+<!-- style.css -->
+```css
+...
 ```
-```
-/* style.css 代码 */
-```
-```
-// script.js 代码
+
+<!-- script.js -->
+```js
+...
 ```
