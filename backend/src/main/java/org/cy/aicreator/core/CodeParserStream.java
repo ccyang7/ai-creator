@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 /**
  * 代码解析器（流式输出）
  */
+@Deprecated
 public final class CodeParserStream {
 
     /**

@@ -11,6 +11,7 @@ import java.io.File;
 /**
  * 生成代码文件保存器
  */
+@Deprecated
 public class GenerCodeFilesSaver {
 
     // 文件保存的根目录
