@@ -1,20 +1,18 @@
-package org.cy.aicreator.model.dto;
+package org.cy.aicreator.model.dto.user;
 
 import lombok.Data;
-import lombok.EqualsAndHashCode;
-import org.cy.aicreator.common.PageRequest;
 
 import java.io.Serializable;
 
 /**
- * 用户(分页)查询参数
+ * 用户更新参数
  *
  * @author cy
  * @since 2026-02-28
  */
-@EqualsAndHashCode(callSuper = true)
 @Data
-public class UserQueryDTO extends PageRequest implements Serializable {
+public class UserUpdateDTO implements Serializable {
+
     private static final long serialVersionUID = 1L;
 
     /**
@@ -28,9 +26,9 @@ public class UserQueryDTO extends PageRequest implements Serializable {
     private String userName;
 
     /**
-     * 账号
+     * 用户头像
      */
-    private String userAccount;
+    private String userAvatar;
 
     /**
      * 简介
@@ -38,9 +36,8 @@ public class UserQueryDTO extends PageRequest implements Serializable {
     private String userProfile;
 
     /**
-     * 用户角色：user/admin/ban
+     * 用户角色：user/admin
      */
     private String userRole;
-
 
 }

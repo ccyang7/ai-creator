@@ -1,14 +1,15 @@
 package org.cy.aicreator.service.impl;
 
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
-import org.cy.aicreator.model.dto.UserLoginDTO;
-import org.cy.aicreator.model.dto.UserQueryDTO;
-import org.cy.aicreator.model.dto.UserRegisterDTO;
+import org.cy.aicreator.model.dto.user.UserLoginDTO;
+import org.cy.aicreator.model.dto.user.UserQueryDTO;
+import org.cy.aicreator.model.dto.user.UserRegisterDTO;
 import org.cy.aicreator.mapper.UserMapper;
 import org.cy.aicreator.model.entity.User;
 import org.cy.aicreator.model.enums.UserRoleEnum;
@@ -77,7 +78,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         User user = new User();
         user.setUserAccount(userAccount);
         user.setUserPassword(encryptPassword);
-        user.setUserName("普通用户");
+        user.setUserName("用户" + IdUtil.simpleUUID().substring(0, 8));
         user.setUserRole(UserRoleEnum.USER.getValue());
         boolean save = this.save(user);
         if (!save) {
@@ -235,13 +236,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String userRole = userQueryDTO.getUserRole();
         String sortField = userQueryDTO.getSortField();
         String sortOrder = userQueryDTO.getSortOrder();
-        return QueryWrapper.create()
+        boolean isAsc = "ascend".equals(sortOrder);
+        QueryWrapper queryWrapper = QueryWrapper.create()
                 .eq("id", id)
                 .eq("user_role", userRole)
                 .like("user_account", userAccount)
                 .like("user_name", userName)
-                .like("user_profile", userProfile)
-                .orderBy(sortField, "ascend".equals(sortOrder));
+                .like("user_profile", userProfile);
+        if (StrUtil.isBlank(sortField)) {
+            queryWrapper.orderBy("create_time", true);
+        } else {
+            queryWrapper.orderBy(sortField, isAsc);
+        }
+        return queryWrapper;
     }
 
     /**

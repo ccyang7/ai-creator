@@ -1,4 +1,4 @@
-package org.cy.aicreator.model.dto;
+package org.cy.aicreator.model.dto.user;
 
 import lombok.Data;
 

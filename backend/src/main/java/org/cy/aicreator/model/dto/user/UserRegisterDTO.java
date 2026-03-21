@@ -1,4 +1,4 @@
-package org.cy.aicreator.model.dto;
+package org.cy.aicreator.model.dto.user;
 
 import lombok.Data;
 
@@ -12,6 +12,7 @@ import java.io.Serializable;
  */
 @Data
 public class UserRegisterDTO implements Serializable {
+
     private static final long serialVersionUID = 1L;
 
     /**
