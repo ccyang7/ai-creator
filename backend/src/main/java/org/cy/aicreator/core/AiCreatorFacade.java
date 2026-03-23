@@ -61,18 +61,18 @@ public class AiCreatorFacade {
      * @param generTypeEnum 生成类型
      * @return 生成的代码文件
      */
-    public Flux<String> generateAndSaveCodeStream(String userMessage, GenerTypeEnum generTypeEnum) {
+    public Flux<String> generateAndSaveCodeStream(String userMessage, GenerTypeEnum generTypeEnum, Long appId) {
         if(generTypeEnum == null){
             throw new BusinessException(ErrorCode.PARAM_ERROR,"代码生成类型不能为空");
         }
         return switch (generTypeEnum) {
             case HTML -> {
                 Flux<String> resultStream = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
-                yield parserAndSaveCodeStream(resultStream, GenerTypeEnum.HTML);
+                yield parserAndSaveCodeStream(resultStream, GenerTypeEnum.HTML, appId);
             }
             case MULTI_FILE -> {
                 Flux<String> resultStream = aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
-                yield parserAndSaveCodeStream(resultStream, GenerTypeEnum.MULTI_FILE);
+                yield parserAndSaveCodeStream(resultStream, GenerTypeEnum.MULTI_FILE, appId);
             }
             default -> {
                 String errorMsg = generTypeEnum+"代码生成类型无效";
@@ -89,7 +89,7 @@ public class AiCreatorFacade {
      * @param outputType 输出类型
      * @return 生成的代码文件
      */
-    private Flux<String> parserAndSaveCodeStream(Flux<String>  resultStream, GenerTypeEnum outputType) {
+    private Flux<String> parserAndSaveCodeStream(Flux<String>  resultStream, GenerTypeEnum outputType,Long appId) {
         // 创建一个StringBuilder对象，用于实时收集代码片段
         StringBuilder codeBuilder = new StringBuilder();
         // 实时收集代码片段
@@ -99,7 +99,7 @@ public class AiCreatorFacade {
                 // 代码解析执行器
                 Object execute = CodeParserExecutor.execute(outputType, codeBuilder.toString());
                 // 代码保存执行器
-                File dir = CodeFileSaverExecutor.executeSaver(execute, outputType);
+                File dir = CodeFileSaverExecutor.executeSaver(execute, outputType,appId);
                 log.info("代码保存成功：{}", dir.getAbsolutePath());
             }catch (Exception e){
                 log.error("代码保存失败：{}", e.getMessage());

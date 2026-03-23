@@ -33,7 +33,7 @@ class AiCreatorFacadeTest {
 
     @Test
     void testGenerateAndSaveHtmlCode() {
-        Flux<String> file = aiCreatorFacade.generateAndSaveCodeStream("生成一个简易登录页面", GenerTypeEnum.HTML);
+        Flux<String> file = aiCreatorFacade.generateAndSaveCodeStream("生成一个简易登录页面", GenerTypeEnum.HTML, 1L);
         List<String> block = file.collectList().block();
         Assertions.assertNotNull(block);
         String completeFile = String.join("", block);
@@ -42,7 +42,7 @@ class AiCreatorFacadeTest {
 
     @Test
     void testGenerateAndSaveMultiFileCode() {
-        Flux<String> file = aiCreatorFacade.generateAndSaveCodeStream("生成一个简易登录页面", GenerTypeEnum.MULTI_FILE);
+        Flux<String> file = aiCreatorFacade.generateAndSaveCodeStream("生成一个简易登录页面", GenerTypeEnum.MULTI_FILE, 1L);
         List<String> block = file.collectList().block();
         Assertions.assertNotNull(block);
         String completeFile = String.join("", block);

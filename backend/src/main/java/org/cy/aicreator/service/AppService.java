@@ -6,7 +6,9 @@ import org.cy.aicreator.model.dto.app.AppAddDTO;
 import org.cy.aicreator.model.dto.app.AppAdminQueryDTO;
 import org.cy.aicreator.model.dto.app.AppQueryDTO;
 import org.cy.aicreator.model.entity.App;
+import org.cy.aicreator.model.entity.User;
 import org.cy.aicreator.model.vo.AppVO;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -92,5 +94,25 @@ public interface AppService extends IService<App> {
      * @return 查询条件包装器
      */
     QueryWrapper getAdminQueryWrapper(AppAdminQueryDTO appAdminQueryDTO);
+
+    /**
+     * 通过聊天生成代码
+     *
+     * @param appId    应用ID
+     * @param prompt   提示
+     * @param loginUser 登录用户
+     * @return 生成结果
+     */
+    Flux<String> chatToGenerateCode(Long appId, String prompt, User loginUser);
+
+
+    /**
+     * 部署应用
+     *
+     * @param appId 应用ID
+     * @param loginUser 登录用户
+     * @return 部署结果
+     */
+    String deployApp(Long appId,User loginUser);
 
 }

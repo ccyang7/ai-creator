@@ -1,7 +1,9 @@
 package org.cy.aicreator.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.json.JSONUtil;
 import com.mybatisflex.core.paginate.Page;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.cy.aicreator.annotation.AuthCheck;
 import org.cy.aicreator.common.BaseResponse;
@@ -11,24 +13,20 @@ import org.cy.aicreator.constant.UserConstant;
 import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
 import org.cy.aicreator.exception.ThrowUtils;
-import org.cy.aicreator.model.dto.app.AppAddDTO;
-import org.cy.aicreator.model.dto.app.AppAdminQueryDTO;
-import org.cy.aicreator.model.dto.app.AppAdminUpdateDTO;
-import org.cy.aicreator.model.dto.app.AppQueryDTO;
-import org.cy.aicreator.model.dto.app.AppUpdateDTO;
+import org.cy.aicreator.model.dto.app.*;
 import org.cy.aicreator.model.entity.App;
 import org.cy.aicreator.model.entity.User;
 import org.cy.aicreator.model.vo.AppVO;
 import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 应用表 控制层
@@ -43,11 +41,12 @@ import java.util.List;
 @RequestMapping("/app")
 public class AppController {
 
-    @Autowired
+    @Resource
     private AppService appService;
 
-    @Autowired
+    @Resource
     private UserService userService;
+
 
     /**
      * 用户创建应用
@@ -268,6 +267,55 @@ public class AppController {
         App app = appService.getById(id);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
         return ResultUtils.success(app);
+    }
+
+    /**
+     * 用户通过聊天生成代码
+     * <p>
+     * 用户通过对话方式生成代码，系统会根据应用的初始化提示词和用户输入的需求，
+     * 调用 AI 生成对应的代码文件。生成完成后会自动保存到文件系统。
+     * 采用 SSE（Server-Sent Events）方式流式返回生成结果。
+     * </p>
+     *
+     * @param chatGenerateDTO 聊天生成代码请求参数
+     * @param request         HTTP 请求对象
+     * @return 流式输出的代码生成结果
+     */
+    @PostMapping(value = "/chat/generate/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatToGenerateCode(
+            @RequestBody ChatGenerateDTO chatGenerateDTO,
+            HttpServletRequest request) {
+        ThrowUtils.throwIf(chatGenerateDTO == null, ErrorCode.PARAM_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        Flux<String> contentFlux = appService.chatToGenerateCode(chatGenerateDTO.getAppId(), chatGenerateDTO.getPrompt(), loginUser);
+        return contentFlux.map(content -> {
+            Map<String, String> wrapper = Map.of("d", content);
+            String jsonStr = JSONUtil.toJsonStr(wrapper);
+            return ServerSentEvent.<String>builder().data(jsonStr).build();
+        }).concatWith(Mono.just(ServerSentEvent.<String>builder().event("done").data("").build()));
+    }
+
+    /**
+     * 部署应用
+     * <p>
+     * 将应用生成的代码文件部署到 Nginx 服务器，部署后可通过浏览器访问。
+     * 系统会将生成的代码文件复制到 Nginx 部署目录，并生成唯一的访问 URL。
+     * </p>
+     *
+     * @param appDeployDTO 部署参数
+     * @param request HTTP 请求对象
+     * @return 部署后的访问 URL
+     */
+    @PostMapping("/deploy")
+    public BaseResponse<String> deployApp(
+            @RequestBody AppDeployDTO appDeployDTO,
+            HttpServletRequest request) {
+        ThrowUtils.throwIf(appDeployDTO == null, ErrorCode.PARAM_ERROR);
+        Long appId = appDeployDTO.getAppId();
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAM_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        String deployUrl = appService.deployApp(appId, loginUser);
+        return ResultUtils.success(deployUrl);
     }
 
 }

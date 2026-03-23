@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import org.cy.aicreator.ai.model.HtmlCodeResult;
 import org.cy.aicreator.ai.model.MultiFileCodeResult;
+import org.cy.aicreator.constant.AppConstant;
 import org.cy.aicreator.model.enums.GenerTypeEnum;
 
 import java.io.File;
@@ -15,7 +16,7 @@ import java.io.File;
 public class GenerCodeFilesSaver {
 
     // 文件保存的根目录
-    private static final String ROOT_PATH = System.getProperty("user.dir") + "/tmp/code_output";
+    private static final String ROOT_PATH = AppConstant.CODE_OUTPUT_ROOT_DIR;
 
     /**
      * 保存文件
