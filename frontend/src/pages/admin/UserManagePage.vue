@@ -192,7 +192,7 @@ const resetSearch = () => {
 }
 
 // 删除数据
-const doDelete = async (id: number) => {
+const doDelete = async (id: string) => {
   if (!id) {
     return
   }
