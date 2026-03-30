@@ -1,45 +1,69 @@
 <template>
   <div class="user-manage-page">
-    <a-card class="user-manage-card" title="用户管理">
+    <div class="user-manage-page__header">
+      <div class="user-manage-page__header-title">
+        <span class="user-manage-page__header-icon">👤</span>
+        <h1 class="user-manage-page__title">用户管理</h1>
+      </div>
+      <div class="user-manage-page__header-stats">
+        <a-statistic title="用户总数" :value="total" :value-style="{ color: '#667eea' }" />
+      </div>
+    </div>
+
+    <a-card class="user-manage-card">
       <!-- 搜索区域 -->
-      <a-form
-        layout="inline"
-        :model="searchParams"
-        class="user-manage-page__search"
-        @finish="doSearch"
-      >
-        <a-form-item label="账号">
-          <a-input
-            v-model:value="searchParams.userAccount"
-            allow-clear
-            placeholder="请输入账号"
-          />
-        </a-form-item>
-        <a-form-item label="用户名">
-          <a-input
-            v-model:value="searchParams.userName"
-            allow-clear
-            placeholder="请输入用户名"
-          />
-        </a-form-item>
-        <a-form-item label="角色">
-          <a-select
-            v-model:value="searchParams.userRole"
-            allow-clear
-            style="width: 140px"
-            placeholder="选择角色"
-          >
-            <a-select-option value="admin">管理员</a-select-option>
-            <a-select-option value="user">普通用户</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" html-type="submit">搜索</a-button>
-            <a-button @click="resetSearch">重置</a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
+      <div class="user-manage-page__search-wrapper">
+        <a-form
+          layout="inline"
+          :model="searchParams"
+          class="user-manage-page__search"
+          @finish="doSearch"
+        >
+          <a-form-item label="账号">
+            <a-input
+              v-model:value="searchParams.userAccount"
+              allow-clear
+              placeholder="请输入账号"
+              class="user-manage-page__input"
+            />
+          </a-form-item>
+          <a-form-item label="用户名">
+            <a-input
+              v-model:value="searchParams.userName"
+              allow-clear
+              placeholder="请输入用户名"
+              class="user-manage-page__input"
+            />
+          </a-form-item>
+          <a-form-item label="角色">
+            <a-select
+              v-model:value="searchParams.userRole"
+              allow-clear
+              style="width: 140px"
+              placeholder="选择角色"
+            >
+              <a-select-option value="admin">
+                <span class="user-manage-page__role-tag user-manage-page__role-tag--admin"
+                  >管理员</span
+                >
+              </a-select-option>
+              <a-select-option value="user">
+                <span class="user-manage-page__role-tag user-manage-page__role-tag--user"
+                  >普通用户</span
+                >
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item>
+            <a-space>
+              <a-button type="primary" html-type="submit" class="user-manage-page__btn"
+                >搜索</a-button
+              >
+              <a-button @click="resetSearch" class="user-manage-page__btn">重置</a-button>
+            </a-space>
+          </a-form-item>
+        </a-form>
+      </div>
 
       <!-- 表格区域 -->
       <a-table
@@ -53,26 +77,43 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'userAvatar'">
-            <a-avatar :src="record.userAvatar" :size="40">
-              {{ record.userName?.[0] ?? '用' }}
-            </a-avatar>
+            <div class="user-manage-page__user-info">
+              <a-avatar
+                :src="record.userAvatar || 'https://api.dicebear.com/7.x/miniavs/svg?seed=default'"
+                :size="44"
+                class="user-manage-page__avatar"
+              />
+            </div>
           </template>
           <template v-else-if="column.dataIndex === 'userRole'">
-            <a-tag v-if="record.userRole === 'admin'" color="green">管理员</a-tag>
-            <a-tag v-else color="blue">普通用户</a-tag>
+            <a-tag v-if="record.userRole === 'admin'" color="green" class="user-manage-page__tag">
+              👑 管理员
+            </a-tag>
+            <a-tag v-else color="blue" class="user-manage-page__tag"> 👤 普通用户 </a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'createTime'">
-            {{ dayjs(record.createTime).format('YYYY-MM-DD HH:mm:ss') }}
+            <div class="user-manage-page__time">
+              {{ dayjs(record.createTime).format('YYYY-MM-DD HH:mm:ss') }}
+            </div>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-popconfirm
-              title="确认删除该用户？"
-              ok-text="确认"
-              cancel-text="取消"
-              @confirm="doDelete(record.id)"
-            >
-              <a-button danger type="link" size="small">删除</a-button>
-            </a-popconfirm>
+            <div class="user-manage-page__actions">
+              <a-popconfirm
+                title="确认删除该用户？"
+                ok-text="确认"
+                cancel-text="取消"
+                @confirm="doDelete(record.id)"
+              >
+                <a-button
+                  danger
+                  type="link"
+                  size="small"
+                  class="user-manage-page__action-btn user-manage-page__action-btn--danger"
+                >
+                  删除
+                </a-button>
+              </a-popconfirm>
+            </div>
           </template>
         </template>
       </a-table>
@@ -213,19 +254,196 @@ onMounted(() => {
 
 <style scoped>
 .user-manage-page {
-  min-height: 60vh;
+  padding: 24px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: calc(100vh - 64px - 48px);
+}
+
+.user-manage-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.user-manage-page__header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-manage-page__header-icon {
+  font-size: 32px;
+  color: #667eea;
+}
+
+.user-manage-page__title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.user-manage-page__header-stats {
+  display: flex;
+  gap: 24px;
 }
 
 .user-manage-card {
-  width: 100%;
-  border-radius: 8px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.user-manage-page__search-wrapper {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%);
+  border-radius: 12px;
+  margin: -16px -16px 16px;
 }
 
 .user-manage-page__search {
-  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.user-manage-page__input {
+  width: 150px;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.user-manage-page__input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.user-manage-page__role-tag {
+  font-weight: 600;
+}
+
+.user-manage-page__role-tag--admin {
+  color: #52c41a;
+}
+
+.user-manage-page__role-tag--user {
+  color: #1677ff;
+}
+
+.user-manage-page__btn {
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.user-manage-page__btn:hover {
+  transform: translateY(-2px);
 }
 
 .user-manage-page__table {
-  margin-top: 8px;
+  margin-top: 16px;
+}
+
+:deep(.ant-table) {
+  background: #fff;
+  border-radius: 12px;
+}
+
+:deep(.ant-table-thead > tr > th) {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  color: #1a1a1a;
+  font-weight: 600;
+  padding: 14px 16px;
+}
+
+:deep(.ant-table-tbody > tr:hover > td) {
+  background: rgba(102, 126, 234, 0.04);
+}
+
+:deep(.ant-table-tbody > tr > td) {
+  padding: 14px 16px;
+}
+
+.user-manage-page__user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-manage-page__avatar {
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.user-manage-page__user-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-manage-page__user-name-text {
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 14px;
+}
+
+.user-manage-page__user-id {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.user-manage-page__tag {
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 10px;
+}
+
+.user-manage-page__time {
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+.user-manage-page__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.user-manage-page__action-btn {
+  border-radius: 6px;
+  transition: all 0.3s;
+  font-size: 12px;
+}
+
+.user-manage-page__action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.user-manage-page__action-btn--danger {
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .user-manage-page {
+    padding: 12px;
+  }
+
+  .user-manage-page__header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .user-manage-page__search {
+    flex-direction: column;
+  }
+
+  .user-manage-page__input {
+    width: 100%;
+  }
 }
 </style>

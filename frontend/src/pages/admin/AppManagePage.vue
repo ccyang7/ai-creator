@@ -18,19 +18,19 @@
           class="app-manage-page__search"
           @finish="doSearch"
         >
-          <a-form-item label="应用 ID">
-            <a-input-number
-              v-model:value="searchParams.id"
-              allow-clear
-              placeholder="请输入 ID"
-              class="app-manage-page__input"
-            />
-          </a-form-item>
           <a-form-item label="应用名称">
             <a-input
               v-model:value="searchParams.appName"
               allow-clear
               placeholder="请输入名称"
+              class="app-manage-page__input"
+            />
+          </a-form-item>
+          <a-form-item label="创建者 ID">
+            <a-input
+              v-model:value="searchParams.userId"
+              allow-clear
+              placeholder="用户 ID"
               class="app-manage-page__input"
             />
           </a-form-item>
@@ -41,38 +41,18 @@
               style="width: 150px"
               placeholder="选择类型"
             >
-              <a-select-option value="NoCode">
-                <span class="app-manage-page__type-tag app-manage-page__type-tag--nocod"
-                  >NoCode</span
+              <a-select-option value="html">
+                <span class="app-manage-page__type-tag app-manage-page__type-tag--html">HTML</span>
+              </a-select-option>
+              <a-select-option value="multi_file">
+                <span class="app-manage-page__type-tag app-manage-page__type-tag--multi"
+                  >MULTI_FILE</span
                 >
               </a-select-option>
-              <a-select-option value="LowCode">
-                <span class="app-manage-page__type-tag app-manage-page__type-tag--lowcode"
-                  >LowCode</span
-                >
-              </a-select-option>
-              <a-select-option value="ProCode">
-                <span class="app-manage-page__type-tag app-manage-page__type-tag--procode"
-                  >ProCode</span
-                >
+              <a-select-option value="vue">
+                <span class="app-manage-page__type-tag app-manage-page__type-tag--vue">VUE</span>
               </a-select-option>
             </a-select>
-          </a-form-item>
-          <a-form-item label="用户 ID">
-            <a-input-number
-              v-model:value="searchParams.userId"
-              allow-clear
-              placeholder="用户 ID"
-              class="app-manage-page__input"
-            />
-          </a-form-item>
-          <a-form-item label="优先级">
-            <a-input-number
-              v-model:value="searchParams.priority"
-              allow-clear
-              placeholder="优先级"
-              style="width: 110px"
-            />
           </a-form-item>
           <a-form-item>
             <a-space>
@@ -112,26 +92,22 @@
             </div>
           </template>
           <template v-else-if="column.dataIndex === 'codeGenType'">
-            <a-tag
-              v-if="record.codeGenType === 'NoCode'"
-              color="green"
-              class="app-manage-page__tag"
-            >
-              ⚡ NoCode
+            <a-tag v-if="record.codeGenType === 'html'" color="green" class="app-manage-page__tag">
+              🌐 HTML
             </a-tag>
             <a-tag
-              v-else-if="record.codeGenType === 'LowCode'"
+              v-else-if="record.codeGenType === 'multi_file'"
               color="orange"
               class="app-manage-page__tag"
             >
-              ⚡ LowCode
+              📁 MULTI_FILE
             </a-tag>
             <a-tag
-              v-else-if="record.codeGenType === 'ProCode'"
+              v-else-if="record.codeGenType === 'vue'"
               color="blue"
               class="app-manage-page__tag"
             >
-              ⚡ ProCode
+              ⚡ VUE
             </a-tag>
             <a-tag v-else class="app-manage-page__tag">{{ record.codeGenType || '-' }}</a-tag>
           </template>
@@ -265,15 +241,9 @@ const loading = ref(false)
 const searchParams = reactive<API.AppAdminQueryDTO>({
   pageNum: 1,
   pageSize: 10,
-  id: undefined,
   appName: '',
-  cover: '',
-  initPrompt: '',
   codeGenType: '',
-  deployKey: '',
-  priority: undefined,
-  userId: undefined,
-  isDelete: undefined,
+  userId: '',
 })
 
 const fetchData = async () => {
@@ -285,9 +255,12 @@ const fetchData = async () => {
     if (res.data.code === 0 && res.data.data) {
       data.value = res.data.data.records || []
       total.value = res.data.data.totalRow || 0
+      // 同步更新分页组件的 total
+      pagination.total = total.value
     }
   } catch (error) {
     console.error(error)
+    message.error('加载失败，请重试')
   } finally {
     loading.value = false
   }
@@ -295,24 +268,23 @@ const fetchData = async () => {
 
 const doSearch = () => {
   searchParams.pageNum = 1
+  pagination.current = 1 // 同步更新分页组件
   fetchData()
 }
 
 const resetSearch = () => {
   searchParams.pageNum = 1
-  searchParams.id = undefined
+  pagination.current = 1 // 同步更新分页组件
   searchParams.appName = ''
-  searchParams.cover = ''
-  searchParams.initPrompt = ''
   searchParams.codeGenType = ''
-  searchParams.deployKey = ''
-  searchParams.priority = undefined
-  searchParams.userId = undefined
-  searchParams.isDelete = undefined
+  searchParams.userId = ''
   fetchData()
 }
 
 const doTableChange = (pag: any) => {
+  // 同步更新分页组件和查询参数
+  pagination.current = pag.current
+  pagination.pageSize = pag.pageSize
   searchParams.pageNum = pag.current
   searchParams.pageSize = pag.pageSize
   fetchData()
@@ -323,6 +295,11 @@ const doDelete = async (id: string) => {
     const res = await adminDeleteApp({ id })
     if (res.data.code === 0) {
       message.success('删除成功')
+      // 如果当前页只有一条数据，删除后回到上一页
+      if (data.value.length === 1 && pagination.current > 1) {
+        pagination.current -= 1
+        searchParams.pageNum = pagination.current
+      }
       fetchData()
     } else {
       message.error(res.data.message || '删除失败')
@@ -364,6 +341,14 @@ const pagination = reactive({
   showSizeChanger: true,
   showQuickJumper: true,
   showTotal: (total: number) => `共 ${total} 条`,
+  // 每页条数变化时的回调
+  onShowSizeChange: (current: number, size: number) => {
+    pagination.pageSize = size
+    searchParams.pageSize = size
+    pagination.current = 1 // 切换每页条数时，重置到第一页
+    searchParams.pageNum = 1
+    fetchData()
+  },
 })
 
 onMounted(() => {
@@ -446,15 +431,15 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.app-manage-page__type-tag--nocod {
+.app-manage-page__type-tag--html {
   color: #52c41a;
 }
 
-.app-manage-page__type-tag--lowcode {
+.app-manage-page__type-tag--multi {
   color: #fa8c16;
 }
 
-.app-manage-page__type-tag--procode {
+.app-manage-page__type-tag--vue {
   color: #1677ff;
 }
 

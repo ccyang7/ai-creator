@@ -30,13 +30,8 @@ declare namespace API {
     sortOrder?: string
     id?: string
     appName?: string
-    cover?: string
-    initPrompt?: string
     codeGenType?: string
-    deployKey?: string
-    priority?: number
     userId?: string
-    isDelete?: number
   }
 
   type AppAdminUpdateDTO = {
