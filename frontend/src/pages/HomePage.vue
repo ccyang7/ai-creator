@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { addApp, listMyAppByPage, listFeaturedAppByPage } from '@/api/appController'
+import AppCard from '@/components/AppCard.vue'
 import {
   RocketOutlined,
   FireOutlined,
@@ -14,9 +15,6 @@ import {
   PaperClipOutlined,
   ThunderboltOutlined,
   SearchOutlined,
-  MessageOutlined,
-  EyeOutlined,
-  UserOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -181,6 +179,18 @@ const openDeployedApp = (appId: string, deployKey: string) => {
   window.open(url, '_blank')
 }
 
+// 处理查看对话
+const handleViewChat = (appId: string, isFeatured: boolean = false) => {
+  goToAppChat(appId, isFeatured)
+}
+
+// 处理查看部署
+const handleViewDeploy = (deployKey: string) => {
+  const deployBaseUrl = import.meta.env.VITE_DEPLOY_BASE_URL || 'http://localhost:88'
+  const url = `${deployBaseUrl}/${deployKey}`
+  window.open(url, '_blank')
+}
+
 onMounted(() => {
   loadMyApps()
   loadFeaturedApps()
@@ -277,48 +287,16 @@ onMounted(() => {
 
       <a-spin :spinning="myAppsLoading" tip="加载中...">
         <div v-if="myApps.length > 0" class="home-page__apps-grid">
-          <div v-for="app in myApps" :key="app.id" class="home-page__app-card">
-            <div class="home-page__app-cover">
-              <img v-if="app.cover" :src="app.cover" :alt="app.appName" />
-              <div v-else class="home-page__app-placeholder">
-                <span class="home-page__app-placeholder-icon">🚀</span>
-              </div>
-              <div class="home-page__app-overlay">
-                <div class="home-page__app-actions">
-                  <a-button
-                    type="primary"
-                    class="home-page__app-action-btn"
-                    @click.stop="goToAppChat(app.id!, false)"
-                  >
-                    <MessageOutlined />
-                    查看对话
-                  </a-button>
-                  <a-button
-                    v-if="app.deployKey"
-                    type="default"
-                    class="home-page__app-action-btn"
-                    @click.stop="openDeployedApp(app.id!, app.deployKey!)"
-                  >
-                    <EyeOutlined />
-                    查看作品
-                  </a-button>
-                </div>
-              </div>
-            </div>
-            <div class="home-page__app-info">
-              <div class="home-page__app-info-left">
-                <a-avatar :src="app.user?.userAvatar" :size="40" class="home-page__app-avatar">
-                  <UserOutlined />
-                </a-avatar>
-              </div>
-              <div class="home-page__app-info-right">
-                <h3 class="home-page__app-name">{{ app.appName || '未命名应用' }}</h3>
-                <p class="home-page__app-user-name">
-                  {{ app.user?.userName || '未知用户' }}
-                </p>
-              </div>
-            </div>
-          </div>
+          <AppCard
+            v-for="app in myApps"
+            :key="app.id"
+            :app="app"
+            type="default"
+            :show-actions="true"
+            :is-featured="false"
+            @view-chat="handleViewChat"
+            @view-deploy="handleViewDeploy"
+          />
         </div>
         <a-empty v-else description="暂无作品，快去创建一个吧" />
 
@@ -370,52 +348,16 @@ onMounted(() => {
 
       <a-spin :spinning="featuredAppsLoading" tip="加载中...">
         <div v-if="featuredApps.length > 0" class="home-page__apps-grid">
-          <div
+          <AppCard
             v-for="app in featuredApps"
             :key="app.id"
-            class="home-page__app-card home-page__app-card--featured"
-          >
-            <div class="home-page__app-cover">
-              <img v-if="app.cover" :src="app.cover" :alt="app.appName" />
-              <div v-else class="home-page__app-placeholder">
-                <RocketOutlined class="home-page__app-placeholder-icon" />
-              </div>
-              <div class="home-page__app-overlay">
-                <div class="home-page__app-actions">
-                  <a-button
-                    type="primary"
-                    class="home-page__app-action-btn"
-                    @click.stop="goToAppChat(app.id!, true)"
-                  >
-                    <MessageOutlined />
-                    查看对话
-                  </a-button>
-                  <a-button
-                    v-if="app.deployKey"
-                    type="default"
-                    class="home-page__app-action-btn"
-                    @click.stop="openDeployedApp(app.id!, app.deployKey!)"
-                  >
-                    <EyeOutlined />
-                    查看作品
-                  </a-button>
-                </div>
-              </div>
-            </div>
-            <div class="home-page__app-info">
-              <div class="home-page__app-info-left">
-                <a-avatar :src="app.user?.userAvatar" :size="40" class="home-page__app-avatar">
-                  <UserOutlined />
-                </a-avatar>
-              </div>
-              <div class="home-page__app-info-right">
-                <h3 class="home-page__app-name">{{ app.appName || '未命名应用' }}</h3>
-                <p class="home-page__app-user-name">
-                  {{ app.user?.userName || '未知用户' }}
-                </p>
-              </div>
-            </div>
-          </div>
+            :app="app"
+            type="featured"
+            :show-actions="true"
+            :is-featured="true"
+            @view-chat="handleViewChat"
+            @view-deploy="handleViewDeploy"
+          />
         </div>
         <a-empty v-else description="暂无精选应用" />
 
@@ -782,144 +724,6 @@ onMounted(() => {
 
 .home-page__app-card--featured:hover {
   border-color: #ffd700;
-}
-
-.home-page__app-cover {
-  width: 100%;
-  height: 180px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  position: relative;
-  overflow: hidden;
-}
-
-.home-page__app-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.4s;
-}
-
-.home-page__app-card:hover .home-page__app-cover img {
-  transform: scale(1.05);
-}
-
-.home-page__app-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
-}
-
-.home-page__app-placeholder-icon {
-  font-size: 64px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.home-page__app-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.home-page__app-card:hover .home-page__app-overlay {
-  opacity: 1;
-}
-
-.home-page__app-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-}
-
-.home-page__app-action-btn {
-  min-width: 140px;
-  height: 40px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 20px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.home-page__app-action-btn:first-child {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-}
-
-.home-page__app-action-btn:first-child:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-}
-
-.home-page__app-action-btn:last-child {
-  background: rgba(255, 255, 255, 0.95);
-  border: 2px solid rgba(102, 126, 234, 0.3);
-  color: #667eea;
-}
-
-.home-page__app-action-btn:last-child:hover {
-  background: #fff;
-  border-color: #667eea;
-  transform: translateY(-2px);
-}
-
-.home-page__app-info {
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.home-page__app-info-left {
-  flex-shrink: 0;
-}
-
-.home-page__app-avatar {
-  border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.home-page__app-info-right {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.home-page__app-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-page__app-user-name {
-  font-size: 13px;
-  color: rgba(0, 0, 0, 0.65);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 @keyframes fadeInDown {

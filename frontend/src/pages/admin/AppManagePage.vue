@@ -92,24 +92,7 @@
             </div>
           </template>
           <template v-else-if="column.dataIndex === 'codeGenType'">
-            <a-tag v-if="record.codeGenType === 'html'" color="green" class="app-manage-page__tag">
-              🌐 HTML
-            </a-tag>
-            <a-tag
-              v-else-if="record.codeGenType === 'multi_file'"
-              color="orange"
-              class="app-manage-page__tag"
-            >
-              📁 MULTI_FILE
-            </a-tag>
-            <a-tag
-              v-else-if="record.codeGenType === 'vue'"
-              color="blue"
-              class="app-manage-page__tag"
-            >
-              ⚡ VUE
-            </a-tag>
-            <a-tag v-else class="app-manage-page__tag">{{ record.codeGenType || '-' }}</a-tag>
+            <CodeGenTypeTag :type="record.codeGenType" />
           </template>
           <template v-else-if="column.dataIndex === 'userId'">
             <div class="app-manage-page__user">👤 {{ record.userId || '-' }}</div>
@@ -181,6 +164,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
+import CodeGenTypeTag from '@/components/CodeGenTypeTag.vue'
 import { adminListAppByPage, adminDeleteApp, adminUpdateApp } from '@/api/appController'
 
 const router = useRouter()
@@ -502,17 +486,6 @@ onMounted(() => {
 .app-manage-page__app-id {
   font-size: 12px;
   color: rgba(0, 0, 0, 0.45);
-}
-
-.app-manage-page__tag {
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 2px 10px;
-}
-
-.app-manage-page__tag--featured {
-  border-color: #faad14;
-  background: rgba(250, 173, 20, 0.1);
 }
 
 .app-manage-page__user {

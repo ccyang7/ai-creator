@@ -217,67 +217,14 @@
     </div>
 
     <!-- 应用详情悬浮窗 -->
-    <a-modal
-      v-model:open="showDetailModal"
-      title="应用详情"
-      :footer="null"
-      width="480px"
-      class="app-chat-page__detail-modal"
-    >
-      <div class="app-chat-page__detail-content">
-        <!-- 应用基础信息 -->
-        <div class="app-chat-page__detail-section">
-          <h3 class="app-chat-page__detail-section-title">基础信息</h3>
-          <div class="app-chat-page__detail-info">
-            <div class="app-chat-page__detail-item">
-              <span class="app-chat-page__detail-label">创建者</span>
-              <div class="app-chat-page__detail-creator">
-                <a-avatar
-                  :src="appInfo.user?.userAvatar"
-                  :size="32"
-                  class="app-chat-page__detail-avatar"
-                >
-                  <UserOutlined />
-                </a-avatar>
-                <span class="app-chat-page__detail-creator-name">{{
-                  appInfo.user?.userName || '未知用户'
-                }}</span>
-              </div>
-            </div>
-            <div class="app-chat-page__detail-item">
-              <span class="app-chat-page__detail-label">创建时间</span>
-              <span class="app-chat-page__detail-value">{{ formatDate(appInfo.createTime) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 操作栏（仅本人或管理员可见） -->
-        <div v-if="isOwner" class="app-chat-page__detail-section">
-          <h3 class="app-chat-page__detail-section-title">操作</h3>
-          <div class="app-chat-page__detail-actions">
-            <a-button
-              type="primary"
-              class="app-chat-page__detail-action-btn"
-              @click="handleEditApp"
-            >
-              <EditOutlined />
-              修改应用
-            </a-button>
-            <a-popconfirm
-              title="确定要删除此应用吗？"
-              ok-text="确定"
-              cancel-text="取消"
-              @confirm="handleDeleteApp"
-            >
-              <a-button danger class="app-chat-page__detail-action-btn">
-                <DeleteOutlined />
-                删除应用
-              </a-button>
-            </a-popconfirm>
-          </div>
-        </div>
-      </div>
-    </a-modal>
+    <AppDetailModal
+      v-model:visible="showDetailModal"
+      :app="appInfo"
+      :is-owner="isOwner"
+      :show-actions="isOwner"
+      @edit="handleEditApp"
+      @delete="handleDeleteApp"
+    />
   </div>
 </template>
 
@@ -288,6 +235,7 @@ import { message } from 'ant-design-vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
+import AppDetailModal from '@/components/AppDetailModal.vue'
 import {
   LeftOutlined,
   CloudUploadOutlined,
@@ -509,15 +457,36 @@ const handleSendMessage = async () => {
     // 处理普通消息
     eventSource.onmessage = (event) => {
       try {
+        console.log('SSE 原始数据:', event.data)
         const parsed = JSON.parse(event.data)
-        // 后端返回的格式是 {"d": content}
+        console.log('SSE 解析后的数据:', parsed)
+        
+        // 后端返回的格式可能包含多个字段
+        // {"d": content} 或 {"content": content, "explanation": explanation}
         const content = parsed.d || parsed.content || ''
-        if (content) {
-          aiContent += content
+        
+        // 如果有中文说明字段（假设字段名为 explanation 或 description）
+        const explanation = parsed.explanation || parsed.description || parsed.cn || ''
+        
+        console.log('提取的内容:', content)
+        console.log('提取的说明:', explanation)
+        
+        if (content || explanation) {
+          // 拼接内容和中文说明
+          let fullContent = aiContent
+          if (explanation && !fullContent.includes(explanation)) {
+            // 如果说明存在且未包含在内容中，添加到前面
+            fullContent = `${explanation}\n\n${content}`
+          } else {
+            fullContent += content
+          }
+          
+          aiContent = fullContent
           messages.value[aiMessageIndex]!.content = aiContent
           scrollToBottom()
         }
       } catch (e) {
+        console.error('JSON 解析失败:', e)
         // 如果不是 JSON，直接作为内容
         aiContent += event.data
         messages.value[aiMessageIndex]!.content = aiContent
@@ -615,18 +584,6 @@ watch(showPreview, (newVal) => {
 // 返回
 const goBack = () => {
   router.back()
-}
-
-// 格式化日期
-const formatDate = (timestamp?: number) => {
-  if (!timestamp) return '未知'
-  return new Date(timestamp).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 // 修改应用
@@ -1272,107 +1229,5 @@ onMounted(async () => {
   .app-chat-page__chat {
     width: 400px;
   }
-}
-
-/* 应用详情悬浮窗样式 */
-.app-chat-page__detail-modal :deep(.ant-modal-header) {
-  padding: 20px 24px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.app-chat-page__detail-modal :deep(.ant-modal-title) {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.app-chat-page__detail-modal :deep(.ant-modal-body) {
-  padding: 24px;
-}
-
-.app-chat-page__detail-content {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.app-chat-page__detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.app-chat-page__detail-section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #666;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.app-chat-page__detail-info {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 12px;
-}
-
-.app-chat-page__detail-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.app-chat-page__detail-label {
-  font-size: 13px;
-  color: #666;
-  min-width: 70px;
-}
-
-.app-chat-page__detail-creator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-chat-page__detail-avatar {
-  border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.app-chat-page__detail-creator-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #1a1a1a;
-}
-
-.app-chat-page__detail-value {
-  font-size: 14px;
-  color: #1a1a1a;
-}
-
-.app-chat-page__detail-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.app-chat-page__detail-action-btn {
-  flex: 1;
-  height: 40px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.3s;
-}
-
-.app-chat-page__detail-action-btn:hover {
-  transform: translateY(-2px);
 }
 </style>
