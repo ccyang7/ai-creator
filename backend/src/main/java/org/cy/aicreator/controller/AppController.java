@@ -1,6 +1,7 @@
 package org.cy.aicreator.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.mybatisflex.core.paginate.Page;
 import jakarta.annotation.Resource;
@@ -125,12 +126,11 @@ public class AppController {
      * 用户根据应用ID查看任意应用详情，返回应用信息和创建用户的脱敏信息
      * </p>
      *
-     * @param id      应用ID
-     * @param request HTTP请求对象
+     * @param id 应用ID
      * @return 应用详情（含用户脱敏信息）
      */
     @GetMapping("/get")
-    public BaseResponse<AppVO> getAppById(long id, HttpServletRequest request) {
+    public BaseResponse<AppVO> getAppById(Long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAM_ERROR);
         App app = appService.getById(id);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
@@ -157,7 +157,7 @@ public class AppController {
         Page<App> appPage = appService.page(Page.of(pageNum, pageSize),
                 appService.getUserQueryWrapper(appQueryDTO, loginUser.getId()));
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
-        List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
+        List<AppVO> appVOList = appService.getAppVOListWithUser(appPage.getRecords());
         appVOPage.setRecords(appVOList);
         return ResultUtils.success(appVOPage);
     }
@@ -243,6 +243,7 @@ public class AppController {
         ThrowUtils.throwIf(appAdminQueryDTO == null, ErrorCode.PARAM_ERROR);
         long pageNum = appAdminQueryDTO.getPageNum();
         long pageSize = appAdminQueryDTO.getPageSize();
+        pageSize = Math.min(pageSize, 20);
         Page<App> appPage = appService.page(Page.of(pageNum, pageSize),
                 appService.getAdminQueryWrapper(appAdminQueryDTO));
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
@@ -277,17 +278,20 @@ public class AppController {
      * 采用 SSE（Server-Sent Events）方式流式返回生成结果。
      * </p>
      *
-     * @param chatGenerateDTO 聊天生成代码请求参数
-     * @param request         HTTP 请求对象
+     * @param appId   应用ID
+     * @param message 用户输入的生成需求
+     * @param request HTTP 请求对象
      * @return 流式输出的代码生成结果
      */
-    @PostMapping(value = "/chat/generate/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(value = "/chat/generate/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> chatToGenerateCode(
-            @RequestBody ChatGenerateDTO chatGenerateDTO,
+            @RequestParam Long appId,
+            @RequestParam String message,
             HttpServletRequest request) {
-        ThrowUtils.throwIf(chatGenerateDTO == null, ErrorCode.PARAM_ERROR);
+        ThrowUtils.throwIf(appId == null||appId <= 0, ErrorCode.PARAM_ERROR,"应用ID无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAM_ERROR,"用户消息不能为空");
         User loginUser = userService.getLoginUser(request);
-        Flux<String> contentFlux = appService.chatToGenerateCode(chatGenerateDTO.getAppId(), chatGenerateDTO.getPrompt(), loginUser);
+        Flux<String> contentFlux = appService.chatToGenerateCode(appId, message, loginUser);
         return contentFlux.map(content -> {
             Map<String, String> wrapper = Map.of("d", content);
             String jsonStr = JSONUtil.toJsonStr(wrapper);
@@ -303,7 +307,7 @@ public class AppController {
      * </p>
      *
      * @param appDeployDTO 部署参数
-     * @param request HTTP 请求对象
+     * @param request      HTTP 请求对象
      * @return 部署后的访问 URL
      */
     @PostMapping("/deploy")

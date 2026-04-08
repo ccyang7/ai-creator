@@ -16,18 +16,9 @@ public class AppAddDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 应用名称
-     */
-    private String appName;
-
-    /**
      * 应用初始化的 prompt（必填）
      */
     private String initPrompt;
 
-    /**
-     * 代码生成类型（枚举值参考 GenerTypeEnum）
-     */
-    private String codeGenType;
 
 }

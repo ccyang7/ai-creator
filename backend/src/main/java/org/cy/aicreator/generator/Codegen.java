@@ -14,7 +14,7 @@ import java.util.Map;
  */
 public class Codegen {
 
-    public static final String[] TABLE_NAMES = {"app"};
+    public static final String[] TABLE_NAMES = {"chat_history"};
 
     public static void main(String[] args) {
         // 从yml获取数据源信息

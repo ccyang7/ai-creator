@@ -32,38 +32,13 @@ public class AppAdminQueryDTO extends PageRequest implements Serializable {
     private String appName;
 
     /**
-     * 应用封面（支持模糊查询）
-     */
-    private String cover;
-
-    /**
-     * 应用初始化的 prompt（支持模糊查询）
-     */
-    private String initPrompt;
-
-    /**
      * 代码生成类型（枚举值参考 GenerTypeEnum）
      */
     private String codeGenType;
 
     /**
-     * 部署标识
-     */
-    private String deployKey;
-
-    /**
-     * 优先级
-     */
-    private Integer priority;
-
-    /**
      * 创建用户ID
      */
     private Long userId;
-
-    /**
-     * 是否删除（0-未删除，1-已删除）
-     */
-    private Integer isDelete;
 
 }

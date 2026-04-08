@@ -10,24 +10,6 @@ import reactor.core.publisher.Flux;
  */
 public interface AiCodeGeneratorService {
 
-    /**
-     * 生成 Html 代码（JSON结构化输出）
-     *
-     * @param userMessage 用户提示词
-     * @return 响应结果
-     */
-    @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
-    HtmlCodeResult generateHtmlCode(String userMessage);
-
-
-    /**
-     * 生成多文件代码（JSON结构化输出）
-     *
-     * @param userMessage 用户提示词
-     * @return 响应结果
-     */
-    @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
-    MultiFileCodeResult generateMultiFileCode(String userMessage);
 
 
 

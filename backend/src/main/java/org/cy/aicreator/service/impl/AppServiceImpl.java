@@ -17,17 +17,22 @@ import org.cy.aicreator.model.dto.app.AppAddDTO;
 import org.cy.aicreator.model.dto.app.AppAdminQueryDTO;
 import org.cy.aicreator.model.dto.app.AppQueryDTO;
 import org.cy.aicreator.model.entity.App;
+import org.cy.aicreator.model.entity.ChatHistory;
 import org.cy.aicreator.model.entity.User;
+import org.cy.aicreator.model.enums.ChatHistoryMessageTypeEnum;
 import org.cy.aicreator.model.enums.GenerTypeEnum;
 import org.cy.aicreator.model.vo.AppVO;
 import org.cy.aicreator.model.vo.UserVO;
 import org.cy.aicreator.service.AppService;
+import org.cy.aicreator.service.ChatHistoryService;
 import org.cy.aicreator.service.UserService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
 import java.io.FileDescriptor;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +55,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private AiCreatorFacade aiCreatorFacade;
 
+    @Resource
+    private ChatHistoryService chatHistoryService;
+
     /**
      * 创建应用
      *
@@ -58,8 +66,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
      * @return 新创建的应用ID
      */
     @Override
-    public long addApp(AppAddDTO appAddDTO, Long userId) {
-        String appName = appAddDTO.getAppName();
+    public Long addApp(AppAddDTO appAddDTO, Long userId) {
+
         String initPrompt = appAddDTO.getInitPrompt();
         if (StrUtil.isBlank(initPrompt)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "initPrompt 不能为空");
@@ -67,6 +75,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = new App();
         BeanUtil.copyProperties(appAddDTO, app);
         app.setUserId(userId);
+        // TODO 生成类型暂时设置为MULTI_FILE
+        app.setCodeGenType(GenerTypeEnum.MULTI_FILE.getValue());
+        // TODO 应用名称默认为初始提示词的前10位字符
+        app.setAppName(initPrompt.substring(0, Math.min(10, initPrompt.length())));
         boolean result = this.save(app);
         if (!result) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建应用失败");
@@ -170,10 +182,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String sortOrder = appQueryDTO.getSortOrder();
         boolean isAsc = "ascend".equals(sortOrder);
         QueryWrapper queryWrapper = QueryWrapper.create()
-                .eq(App::getUserId, userId)
-                .like(App::getAppName, appName);
+                .eq(App::getUserId, userId);
+        if (StrUtil.isNotBlank(appName)) {
+            queryWrapper.like(App::getAppName, appName);
+        }
         if (StrUtil.isBlank(sortField)) {
-            queryWrapper.orderBy(App::getCreateTime, true);
+            queryWrapper.orderBy(App::getCreateTime, false);
         } else {
             queryWrapper.orderBy(sortField, isAsc);
         }
@@ -200,9 +214,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String sortOrder = appQueryDTO.getSortOrder();
         boolean isAsc = "ascend".equals(sortOrder);
         QueryWrapper queryWrapper = QueryWrapper.create()
-                .ge(App::getPriority, AppConstant.FEATURED_PRIORITY)
-                .like(App::getAppName, appName)
-                .orderBy(App::getPriority, false);
+                .ge(App::getPriority, AppConstant.FEATURED_PRIORITY);
+        if (StrUtil.isNotBlank(appName)) {
+            queryWrapper.like(App::getAppName, appName);
+        }
+        queryWrapper.orderBy(App::getPriority, false);
         if (StrUtil.isBlank(sortField)) {
             queryWrapper.orderBy(App::getCreateTime, true);
         } else {
@@ -225,30 +241,22 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (appAdminQueryDTO == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "请求参数为空");
         }
-        Long id = appAdminQueryDTO.getId();
         String appName = appAdminQueryDTO.getAppName();
-        String cover = appAdminQueryDTO.getCover();
-        String initPrompt = appAdminQueryDTO.getInitPrompt();
         String codeGenType = appAdminQueryDTO.getCodeGenType();
-        String deployKey = appAdminQueryDTO.getDeployKey();
-        Integer priority = appAdminQueryDTO.getPriority();
         Long userId = appAdminQueryDTO.getUserId();
-        Integer isDelete = appAdminQueryDTO.getIsDelete();
         String sortField = appAdminQueryDTO.getSortField();
         String sortOrder = appAdminQueryDTO.getSortOrder();
         boolean isAsc = "ascend".equals(sortOrder);
         QueryWrapper queryWrapper = QueryWrapper.create()
-                .eq(App::getId, id)
-                .like(App::getAppName, appName)
-                .like(App::getCover, cover)
-                .like(App::getInitPrompt, initPrompt)
-                .eq(App::getCodeGenType, codeGenType)
-                .eq(App::getDeployKey, deployKey)
-                .eq(App::getPriority, priority)
-                .eq(App::getUserId, userId)
-                .eq(App::getIsDelete, isDelete);
+                .eq("user_id", userId);
+        if (StrUtil.isNotBlank(appName)) {
+            queryWrapper.like("app_name", appName);
+        }
+        if (StrUtil.isNotBlank(codeGenType)) {
+            queryWrapper.like("code_gen_type", codeGenType);
+        }
         if (StrUtil.isBlank(sortField)) {
-            queryWrapper.orderBy(App::getCreateTime, true);
+            queryWrapper.orderBy("create_time", true);
         } else {
             queryWrapper.orderBy(sortField, isAsc);
         }
@@ -263,17 +271,17 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
      * </p>
      *
      * @param appId     应用ID
-     * @param prompt    用户输入的提示词/需求描述
+     * @param message   用户输入的提示词/需求描述
      * @param loginUser 当前登录用户
      * @return 流式输出的代码生成结果
      * @throws BusinessException 参数错误、应用不存在、无权限或代码生成类型无效
      */
     @Override
-    public Flux<String> chatToGenerateCode(Long appId, String prompt, User loginUser) {
+    public Flux<String> chatToGenerateCode(Long appId, String message, User loginUser) {
         if (appId == null || appId <= 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "应用ID无效");
         }
-        if (StrUtil.isBlank(prompt)) {
+        if (StrUtil.isBlank(message)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "提示词不能为空");
         }
         App app = this.getById(appId);
@@ -283,14 +291,37 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权操作该应用");
         }
+        // 校验应用的代码生成类型
         String codeGenType = app.getCodeGenType();
         GenerTypeEnum generTypeEnum = GenerTypeEnum.getEnumByValue(codeGenType);
-        if (generTypeEnum == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "代码生成类型无效");
-        }
+        ThrowUtils.throwIf(generTypeEnum == null, ErrorCode.PARAM_ERROR, "代码生成类型无效");
+
+        // 通过校验后，添加用户消息到对话历史
+        chatHistoryService.addChatMessage(appId, loginUser.getId(), message, ChatHistoryMessageTypeEnum.USER.getValue());
+
+        // 调用AI生成代码
         String initPrompt = app.getInitPrompt();
-        String userMessage = initPrompt + "\n\n用户需求：" + prompt;
-        return aiCreatorFacade.generateAndSaveCodeStream(userMessage, generTypeEnum, appId);
+        String userMessage = initPrompt + "\n\n用户需求：" + message;
+        Flux<String> contentFlux = aiCreatorFacade.generateAndSaveCodeStream(userMessage, generTypeEnum, appId);
+
+        // 收集AI响应内容，完成后保存对话历史
+        StringBuilder aiResponseBuilder = new StringBuilder();
+        return contentFlux.map(content -> {
+                    // 收集AI响应内容
+                    aiResponseBuilder.append(content);
+                    return content;
+                })
+                .doOnComplete(() -> {
+                    // 流式响应完成后，添加AI消息到对话历史
+                    String aiResponse = aiResponseBuilder.toString();
+                    if (StrUtil.isNotBlank(aiResponse)) {
+                        chatHistoryService.addChatMessage(appId, loginUser.getId(), aiResponse, ChatHistoryMessageTypeEnum.AI.getValue());
+                    }
+                }).doOnError(e -> {
+                    //  如果AI回复失败，则添加错误消息到对话历史
+                    String errorMessage = "AI 响应失败，请稍后再试" + e.getMessage();
+                    chatHistoryService.addChatMessage(appId, loginUser.getId(), errorMessage, ChatHistoryMessageTypeEnum.AI.getValue());
+                });
     }
 
     /**
@@ -350,7 +381,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         try {
             FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
         } catch (Exception e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "复制文件失败"+ e.getMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "复制文件失败" + e.getMessage());
         }
 
         // 8. 更新应用的 deployKey 和部署时间
@@ -363,6 +394,54 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
         // 9. 返回可访问的 URL
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+    }
+
+
+    /**
+     * 删除应用时关联删除对话历史、源代码文件和部署文件
+     *
+     * @param id 应用ID
+     * @return 是否成功
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean removeById(Serializable id) {
+        if (id == null) {
+            return false;
+        }
+        Long appId = Long.parseLong(id.toString());
+        if (appId <= 0) {
+            return false;
+        }
+
+        App app = this.getById(appId);
+        if (app == null) {
+            return false;
+        }
+
+        String codeGenType = app.getCodeGenType();
+        String deployKey = app.getDeployKey();
+
+        // 删除源代码文件
+        String sourceDirName = codeGenType + "_" + appId;
+        String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+        File sourceDir = new File(sourceDirPath);
+        if (sourceDir.exists()) {
+            FileUtil.del(sourceDir);
+        }
+
+        // 删除部署文件
+        if (StrUtil.isNotBlank(deployKey)) {
+            String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
+            File deployDir = new File(deployDirPath);
+            if (deployDir.exists()) {
+                FileUtil.del(deployDir);
+            }
+        }
+
+        chatHistoryService.deleteByAppId(appId);
+
+        return super.removeById(id);
     }
 
 

@@ -21,9 +21,11 @@ public class AppQueryDTO extends PageRequest implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+
     /**
      * 应用名称（支持模糊查询）
      */
     private String appName;
+
 
 }

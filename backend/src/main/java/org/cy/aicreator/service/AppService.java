@@ -27,7 +27,7 @@ public interface AppService extends IService<App> {
      * @param userId    创建用户ID
      * @return 新创建的应用ID
      */
-    long addApp(AppAddDTO appAddDTO, Long userId);
+    Long addApp(AppAddDTO appAddDTO, Long userId);
 
     /**
      * 获取应用视图（脱敏）

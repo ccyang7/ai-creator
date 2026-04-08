@@ -239,10 +239,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         boolean isAsc = "ascend".equals(sortOrder);
         QueryWrapper queryWrapper = QueryWrapper.create()
                 .eq("id", id)
-                .eq("user_role", userRole)
-                .like("user_account", userAccount)
-                .like("user_name", userName)
-                .like("user_profile", userProfile);
+                .eq("user_role", userRole);
+        if (StrUtil.isNotBlank(userAccount)) {
+            queryWrapper.like("user_account", userAccount);
+        }
+        if (StrUtil.isNotBlank(userName)) {
+            queryWrapper.like("user_name", userName);
+        }
+        if (StrUtil.isNotBlank(userProfile)) {
+            queryWrapper.like("user_profile", userProfile);
+        }
         if (StrUtil.isBlank(sortField)) {
             queryWrapper.orderBy("create_time", true);
         } else {

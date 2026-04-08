@@ -1,6 +1,11 @@
 spring:
   application:
     name: ai-creator
+  session:
+    redis:
+      flush-mode: immediate
+      namespace: "ai-creator:session"
+    timeout: 3600
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -11,6 +16,15 @@ spring:
   profiles:
     active: local
 
+  # redis
+  data:
+    redis:
+      host: 192.168.116.129
+      port: 6379
+      password: 2632052445
+      database: 0
+      ttl: 3600
+
 logging:
   level:
     dev:
@@ -20,6 +34,9 @@ server:
   port: 8200
   servlet:
     context-path: /api
+    session:
+      cookie:
+        max-age: 3600
 
 # springdoc-openapi
 springdoc:
@@ -31,3 +48,4 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
