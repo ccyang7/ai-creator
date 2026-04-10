@@ -9,6 +9,7 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import org.cy.aicreator.constant.AppConstant;
 import org.cy.aicreator.core.AiCreatorFacade;
+import org.cy.aicreator.core.handler.StreamHandlerExecutor;
 import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
 import org.cy.aicreator.exception.ThrowUtils;
@@ -26,6 +27,7 @@ import org.cy.aicreator.model.vo.UserVO;
 import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.ChatHistoryService;
 import org.cy.aicreator.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -57,6 +59,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private ChatHistoryService chatHistoryService;
+
+    @Resource
+    private StreamHandlerExecutor streamHandlerExecutor;
 
     /**
      * 创建应用
@@ -302,26 +307,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 调用AI生成代码
         String initPrompt = app.getInitPrompt();
         String userMessage = initPrompt + "\n\n用户需求：" + message;
-        Flux<String> contentFlux = aiCreatorFacade.generateAndSaveCodeStream(userMessage, generTypeEnum, appId);
+        Flux<String> codeStream = aiCreatorFacade.generateAndSaveCodeStream(userMessage, generTypeEnum, appId);
 
         // 收集AI响应内容，完成后保存对话历史
-        StringBuilder aiResponseBuilder = new StringBuilder();
-        return contentFlux.map(content -> {
-                    // 收集AI响应内容
-                    aiResponseBuilder.append(content);
-                    return content;
-                })
-                .doOnComplete(() -> {
-                    // 流式响应完成后，添加AI消息到对话历史
-                    String aiResponse = aiResponseBuilder.toString();
-                    if (StrUtil.isNotBlank(aiResponse)) {
-                        chatHistoryService.addChatMessage(appId, loginUser.getId(), aiResponse, ChatHistoryMessageTypeEnum.AI.getValue());
-                    }
-                }).doOnError(e -> {
-                    //  如果AI回复失败，则添加错误消息到对话历史
-                    String errorMessage = "AI 响应失败，请稍后再试" + e.getMessage();
-                    chatHistoryService.addChatMessage(appId, loginUser.getId(), errorMessage, ChatHistoryMessageTypeEnum.AI.getValue());
-                });
+        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, generTypeEnum);
     }
 
     /**

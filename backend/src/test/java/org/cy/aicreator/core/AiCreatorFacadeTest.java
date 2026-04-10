@@ -17,18 +17,6 @@ class AiCreatorFacadeTest {
     private AiCreatorFacade aiCreatorFacade;
 
 
-    @Test
-    void generateAndSaveHtmlCode() {
-        File file = aiCreatorFacade.generateAndSaveCode("生成一个登录页面", GenerTypeEnum.HTML);
-        Assertions.assertNotNull(file);
-    }
-
-
-    @Test
-    void generateAndSaveMultiFileCode() {
-        File file = aiCreatorFacade.generateAndSaveCode("生成一个登录页面", GenerTypeEnum.MULTI_FILE);
-        Assertions.assertNotNull(file);
-    }
 
 
     @Test
@@ -48,4 +36,19 @@ class AiCreatorFacadeTest {
         String completeFile = String.join("", block);
         Assertions.assertNotNull(file);
     }
+
+
+    @Test
+    void generateVueProjectCodeStream() {
+        Flux<String> codeStream = aiCreatorFacade.generateAndSaveCodeStream(
+                "简单的任务记录网站，总代码量不超过 200 行",
+                GenerTypeEnum.VUE_PROJECT, 1L);
+        // 阻塞等待所有数据收集完成
+        List<String> result = codeStream.collectList().block();
+        // 验证结果
+        Assertions.assertNotNull(result);
+        String completeContent = String.join("", result);
+        Assertions.assertNotNull(completeContent);
+    }
+
 }

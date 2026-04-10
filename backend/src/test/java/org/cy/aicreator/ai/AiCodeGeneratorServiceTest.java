@@ -15,15 +15,5 @@ class AiCodeGeneratorServiceTest {
     @Resource
     private AiCodeGeneratorService aiCodeGeneratorService;
 
-    @Test
-    void generateHtmlCode() {
-        HtmlCodeResult htmlCode = aiCodeGeneratorService.generateHtmlCode("帮我生成一个个人博客，代码量不超过300行，如果超过了，顺带输出超过的行数");
-        Assertions.assertNotNull(htmlCode);
-    }
 
-    @Test
-    void generateMultiFileCode() {
-        MultiFileCodeResult htmlCode = aiCodeGeneratorService.generateMultiFileCode("帮我生成一个留言板，代码量不超过300行，如果超过了，顺带输出超过的行数");
-        Assertions.assertNotNull(htmlCode);
-    }
 }

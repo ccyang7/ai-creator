@@ -20,7 +20,15 @@ public enum GenerTypeEnum {
     /**
      * 多文件模式
      */
-    MULTI_FILE("多文件模式", "multi_file");
+    MULTI_FILE("多文件模式", "multi_file"),
+
+
+    /**
+     * Vue 工程模式
+     */
+    VUE_PROJECT("Vue 工程模式", "vue_project");
+;
+
 
     private final String text;
     private final String value;
