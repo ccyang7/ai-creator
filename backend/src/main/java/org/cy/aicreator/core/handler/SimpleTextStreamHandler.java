@@ -1,5 +1,6 @@
 package org.cy.aicreator.core.handler;
 
+import cn.hutool.core.util.StrUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.cy.aicreator.model.entity.User;
 import org.cy.aicreator.model.enums.ChatHistoryMessageTypeEnum;
@@ -27,21 +28,24 @@ public class SimpleTextStreamHandler {
                                ChatHistoryService chatHistoryService,
                                long appId, User loginUser) {
         StringBuilder aiResponseBuilder = new StringBuilder();
-        return originFlux
-                .map(chunk -> {
+
+        return originFlux.map(content -> {
                     // 收集AI响应内容
-                    aiResponseBuilder.append(chunk);
-                    return chunk;
+                    aiResponseBuilder.append(content);
+                    return content;
                 })
                 .doOnComplete(() -> {
                     // 流式响应完成后，添加AI消息到对话历史
                     String aiResponse = aiResponseBuilder.toString();
-                    chatHistoryService.addChatMessage(appId, loginUser.getId(), ChatHistoryMessageTypeEnum.AI.getValue(), aiResponse);
-                })
-                .doOnError(error -> {
-                    // 如果AI回复失败，也要记录错误消息
-                    String errorMessage = "AI回复失败: " + error.getMessage();
-                    chatHistoryService.addChatMessage(appId, loginUser.getId(), ChatHistoryMessageTypeEnum.AI.getValue(), errorMessage);
+                    if (StrUtil.isNotBlank(aiResponse)) {
+                        chatHistoryService.addChatMessage(appId, loginUser.getId(), aiResponse, ChatHistoryMessageTypeEnum.AI.getValue());
+                    }
+                }).doOnError(e -> {
+                    //  如果AI回复失败，则添加错误消息到对话历史
+                    String errorMessage = "AI 响应失败，请稍后再试" + e.getMessage();
+                    chatHistoryService.addChatMessage(appId, loginUser.getId(), errorMessage, ChatHistoryMessageTypeEnum.AI.getValue());
                 });
     }
+
+
 }
