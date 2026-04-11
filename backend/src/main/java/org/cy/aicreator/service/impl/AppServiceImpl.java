@@ -8,6 +8,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import org.cy.aicreator.ai.SmartRoutingService;
+import org.cy.aicreator.ai.SmartRoutingServiceFactory;
 import org.cy.aicreator.constant.AppConstant;
 import org.cy.aicreator.core.AiCreatorFacade;
 import org.cy.aicreator.core.handler.StreamHandlerExecutor;
@@ -63,7 +64,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private StreamHandlerExecutor streamHandlerExecutor;
 
     @Resource
-    private SmartRoutingService smartRoutingService;
+    private SmartRoutingServiceFactory smartRoutingServiceFactory;
 
     /**
      * 创建应用
@@ -82,7 +83,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = new App();
         BeanUtil.copyProperties(appAddDTO, app);
         app.setUserId(userId);
-        // AI智能路由决定生成代码类型
+        // AI智能路由决定生成代码类型（多例模式）
+        SmartRoutingService smartRoutingService = smartRoutingServiceFactory.createSmartCodeGenTypeRoutingService();
         GenerTypeEnum codeGenType = smartRoutingService.routeCodeGenType(initPrompt);
         app.setCodeGenType(codeGenType.getValue());
         // AI智能路由决定应用名称

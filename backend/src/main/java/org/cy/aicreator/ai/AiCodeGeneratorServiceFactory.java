@@ -17,6 +17,8 @@ import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
 import org.cy.aicreator.model.enums.GenerTypeEnum;
 import org.cy.aicreator.service.ChatHistoryService;
+import org.cy.aicreator.utils.SpringContextUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -30,16 +32,8 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class AiCodeGeneratorServiceFactory {
 
-    // JSON结构化输出
-    @Resource
+    @Resource(name = "openAiChatModel")
     private ChatLanguageModel chatLanguageModel;
-
-    // 流式输出
-    @Resource
-    private StreamingChatLanguageModel openAiStreamingChatModel;
-
-    @Resource
-    private StreamingChatLanguageModel reasoningStreamingChatModel;
 
     @Resource
     private RedisChatMemoryStore redisChatMemoryStore;
@@ -49,11 +43,12 @@ public class AiCodeGeneratorServiceFactory {
     private ChatHistoryService chatHistoryService;
 
 
+
     /**
      * 创建AI代码生成服务（流式输出）
      *
      * @param appId 应用ID
-     * @return
+     * @return AI代码生成服务
      */
     public AiCodeGeneratorService crateAiCodeGeneratorService(long appId, GenerTypeEnum codeType) {
         log.info("创建AI代码生成服务，appId：{}", appId);
@@ -68,21 +63,31 @@ public class AiCodeGeneratorServiceFactory {
         // 根据生成类型选择不同的模型配置
         return switch (codeType) {
             // HTML, 多文件模式->默认模型
-            case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
-                    .chatLanguageModel(chatLanguageModel)
-                    .streamingChatLanguageModel(openAiStreamingChatModel)
-                    .chatMemory(chatMemory)
-                    .build();
+            case HTML, MULTI_FILE -> {
+                // 采用多例模式，避免并发问题
+                StreamingChatLanguageModel streamingChatModelPrototype = SpringContextUtil
+                        .getBean("streamingChatModelPrototype", StreamingChatLanguageModel.class);
+                yield AiServices.builder(AiCodeGeneratorService.class)
+                        .chatLanguageModel(chatLanguageModel)
+                        .streamingChatLanguageModel(streamingChatModelPrototype)
+                        .chatMemory(chatMemory)
+                        .build();
+            }
 
             // Vue工程模式->推理流式模型（带工具调用）
-            case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
-                    .chatLanguageModel(chatLanguageModel)
-                    .streamingChatLanguageModel(reasoningStreamingChatModel)
-                    .chatMemoryProvider(memoryId -> chatMemory)
-                    .tools(new FileWriteTool())
-                    .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage
-                            .from(toolExecutionRequest, "没有找到此工具：" + toolExecutionRequest.name()))
-                    .build();
+            case VUE_PROJECT -> {
+                // 采用多例模式，避免并发问题
+                StreamingChatLanguageModel reasoningStreamingChatModelPrototype = SpringContextUtil
+                        .getBean("reasoningStreamingChatModelPrototype", StreamingChatLanguageModel.class);
+                yield AiServices.builder(AiCodeGeneratorService.class)
+                        .chatLanguageModel(chatLanguageModel)
+                        .streamingChatLanguageModel(reasoningStreamingChatModelPrototype)
+                        .chatMemoryProvider(memoryId -> chatMemory)
+                        .tools(new FileWriteTool())
+                        .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage
+                                .from(toolExecutionRequest, "没有找到此工具：" + toolExecutionRequest.name()))
+                        .build();
+            }
 
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的生成类型：" + codeType.getValue());
         };
@@ -120,7 +125,7 @@ public class AiCodeGeneratorServiceFactory {
     /**
      * 获取缓存键
      *
-     * @param appId 应用ID
+     * @param appId       应用ID
      * @param codeGenType 生成类型
      * @return 缓存键
      */
