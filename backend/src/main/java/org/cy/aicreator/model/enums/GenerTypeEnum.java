@@ -15,18 +15,18 @@ public enum GenerTypeEnum {
     /**
      * HTML模式
      */
-    HTML("HTML模式", "html"),
+    HTML("HTML", "html"),
 
     /**
      * 多文件模式
      */
-    MULTI_FILE("多文件模式", "multi_file"),
+    MULTI_FILE("MULTI_FILE", "multi_file"),
 
 
     /**
      * Vue 工程模式
      */
-    VUE_PROJECT("Vue 工程模式", "vue_project");
+    VUE_PROJECT("VUE_PROJECT", "vue_project");
 ;
 
 

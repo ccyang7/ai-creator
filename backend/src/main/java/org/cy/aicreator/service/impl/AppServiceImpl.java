@@ -7,6 +7,7 @@ import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import org.cy.aicreator.ai.SmartRoutingService;
 import org.cy.aicreator.constant.AppConstant;
 import org.cy.aicreator.core.AiCreatorFacade;
 import org.cy.aicreator.core.handler.StreamHandlerExecutor;
@@ -18,7 +19,6 @@ import org.cy.aicreator.model.dto.app.AppAddDTO;
 import org.cy.aicreator.model.dto.app.AppAdminQueryDTO;
 import org.cy.aicreator.model.dto.app.AppQueryDTO;
 import org.cy.aicreator.model.entity.App;
-import org.cy.aicreator.model.entity.ChatHistory;
 import org.cy.aicreator.model.entity.User;
 import org.cy.aicreator.model.enums.ChatHistoryMessageTypeEnum;
 import org.cy.aicreator.model.enums.GenerTypeEnum;
@@ -28,13 +28,11 @@ import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.ChatHistoryService;
 import org.cy.aicreator.service.ScreenshotService;
 import org.cy.aicreator.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -64,6 +62,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
 
+    @Resource
+    private SmartRoutingService smartRoutingService;
+
     /**
      * 创建应用
      *
@@ -81,10 +82,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = new App();
         BeanUtil.copyProperties(appAddDTO, app);
         app.setUserId(userId);
-        // TODO 生成类型暂时设置为MULTI_FILE
-        app.setCodeGenType(GenerTypeEnum.MULTI_FILE.getValue());
-        // TODO 应用名称默认为初始提示词的前10位字符
-        app.setAppName(initPrompt.substring(0, Math.min(10, initPrompt.length())));
+        // AI智能路由决定生成代码类型
+        GenerTypeEnum codeGenType = smartRoutingService.routeCodeGenType(initPrompt);
+        app.setCodeGenType(codeGenType.getValue());
+        // AI智能路由决定应用名称
+        String appName = smartRoutingService.routeAppName(initPrompt);
+        app.setAppName(appName);
         boolean result = this.save(app);
         if (!result) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建应用失败");
