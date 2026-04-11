@@ -60,7 +60,7 @@ const props = withDefaults(defineProps<AppCardProps>(), {
 
 const emit = defineEmits<{
   (e: 'view-chat', appId: string): void
-  (e: 'view-deploy', appId: string, deployKey: string): void
+  (e: 'view-deploy', deployKey: string): void
   (e: 'click', appId: string): void
 }>()
 
@@ -77,7 +77,7 @@ const handleViewChat = () => {
 // 查看部署
 const handleViewDeploy = () => {
   if (props.app.deployKey) {
-    emit('view-deploy', props.app.id!, props.app.deployKey)
+    emit('view-deploy', props.app.deployKey)
   }
 }
 </script>

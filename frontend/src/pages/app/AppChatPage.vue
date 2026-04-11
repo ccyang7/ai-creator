@@ -17,6 +17,7 @@
             {{ appInfo.appName?.[0] || 'A' }}
           </a-avatar>
           <span class="app-chat-page__app-name">{{ appInfo.appName || '未命名应用' }}</span>
+          <CodeGenTypeTag v-if="appInfo.codeGenType" :type="appInfo.codeGenType" />
         </div>
       </div>
       <div class="app-chat-page__header-right">
@@ -38,6 +39,14 @@
           <CheckCircleOutlined />
           已部署
         </a-button>
+        <a-button
+          class="app-chat-page__download-btn"
+          :loading="downloading"
+          @click="handleDownloadCode"
+        >
+          <DownloadOutlined />
+          下载代码
+        </a-button>
         <a-button v-if="deployedUrl" class="app-chat-page__preview-btn" @click="openDeployedUrl">
           <EyeOutlined />
           访问已部署网站
@@ -51,6 +60,13 @@
       <div class="app-chat-page__chat" :style="{ width: chatWidth + 'px' }">
         <!-- 消息区域 -->
         <div class="app-chat-page__messages" ref="messagesContainer">
+          <!-- 加载更多按钮 -->
+          <div v-if="hasMoreHistory && messages.length > 0" class="app-chat-page__load-more">
+            <a-button type="link" :loading="loadingHistory" @click="loadChatHistory(true)">
+              {{ loadingHistory ? '加载中...' : '加载更多历史消息' }}
+            </a-button>
+          </div>
+
           <div
             v-for="(message, index) in messages"
             :key="index"
@@ -123,11 +139,7 @@
 
         <!-- 用户消息输入框 -->
         <div class="app-chat-page__input-area">
-          <a-tooltip
-            v-if="!isOwner && !isViewMode"
-            title="无法在别人的作品下对话哦~"
-            placement="top"
-          >
+          <a-tooltip v-if="!isOwner" title="无法在别人的作品下对话哦~" placement="top">
             <div class="app-chat-page__input-wrapper app-chat-page__input-wrapper--disabled">
               <a-textarea
                 v-model:value="userInput"
@@ -164,7 +176,7 @@
               </a-button>
             </div>
             <a-button
-              v-if="isOwner && !isViewMode"
+              v-if="isOwner"
               type="primary"
               class="app-chat-page__send-btn"
               :loading="isLoading"
@@ -250,9 +262,13 @@ import {
   CheckCircleOutlined,
   InfoCircleOutlined,
   DeleteOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons-vue'
 import { getAppById, deployApp, deleteApp } from '@/api/appController'
+import { downloadFile } from '@/request'
+import { listAppChatHistory } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
+import CodeGenTypeTag from '@/components/CodeGenTypeTag.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -290,22 +306,33 @@ const previewFrame = ref<HTMLIFrameElement | null>(null)
 const deployedUrl = ref('')
 const deploying = ref(false)
 
-// 权限控制
-const isOwner = ref(false)
-const isViewMode = ref(false)
+// 下载相关
+const downloading = ref(false)
 
-// 应用详情悬浮窗
-const showDetailModal = ref(false)
+// ==================== 权限控制 ====================
+const isOwner = ref(false) // 是否是应用的所有者（本人或管理员）
 
-// 拖拽相关
-const chatWidth = ref(500)
-const previewWidth = ref(0)
-const isResizing = ref(false)
-const startX = ref(0)
-const startChatWidth = ref(0)
-const mainContainer = ref<HTMLElement | null>(null)
+// ==================== 对话历史相关 ====================
+const hasMoreHistory = ref(true) // 是否还有更多历史消息可加载
+const loadingHistory = ref(false) // 是否正在加载历史消息
+const lastCreateTime = ref<string>('') // 游标：最后一条消息的创建时间，用于分页加载
 
-// 滚动到底部
+// ==================== 应用详情悬浮窗 ====================
+const showDetailModal = ref(false) // 是否显示应用详情弹窗
+
+// ==================== 拖拽相关 ====================
+const chatWidth = ref(500) // 对话区域宽度
+const previewWidth = ref(0) // 预览区域宽度
+const isResizing = ref(false) // 是否正在拖拽调整大小
+const startX = ref(0) // 拖拽开始时的鼠标 X 坐标
+const startChatWidth = ref(0) // 拖拽开始时的对话区域宽度
+const mainContainer = ref<HTMLElement | null>(null) // 主容器引用
+
+// ==================== 滚动控制 ====================
+/**
+ * 滚动到消息列表底部
+ * 用于新消息到达时自动滚动
+ */
 const scrollToBottom = () => {
   nextTick(() => {
     if (messagesContainer.value) {
@@ -314,7 +341,17 @@ const scrollToBottom = () => {
   })
 }
 
-// 渲染 Markdown
+// ==================== Markdown 渲染 ====================
+/**
+ * 渲染 Markdown 内容
+ * @param content Markdown 格式的内容
+ * @returns 渲染后的 HTML
+ *
+ * 功能说明：
+ * 1. 支持代码高亮（使用 highlight.js）
+ * 2. 自动转义 HTML 特殊字符
+ * 3. 支持多种编程语言的语法高亮
+ */
 const renderMarkdown = (content: string) => {
   // 配置 markdown-it 支持代码高亮
   md.set({
@@ -339,7 +376,13 @@ const renderMarkdown = (content: string) => {
   return md.render(content)
 }
 
-// 加载应用信息
+// ==================== 加载应用信息 ====================
+/**
+ * 加载应用详细信息
+ * 1. 获取应用 ID
+ * 2. 调用后端接口获取应用信息
+ * 3. 判断当前用户是否是应用的所有者
+ */
 const loadAppInfo = async () => {
   const id = route.params.id as string
   appId.value = id
@@ -349,9 +392,6 @@ const loadAppInfo = async () => {
     router.push('/')
     return
   }
-
-  // 检查是否是查看模式（从 URL 参数判断）
-  isViewMode.value = !!route.query.view
 
   try {
     const res = await getAppById({ id: appId.value })
@@ -370,7 +410,6 @@ const loadAppInfo = async () => {
       }
 
       console.log('isOwner:', isOwner.value)
-      console.log('isViewMode:', isViewMode.value)
     } else {
       message.error('应用不存在')
       router.push('/')
@@ -381,7 +420,90 @@ const loadAppInfo = async () => {
   }
 }
 
-// 发送消息
+// ==================== 加载对话历史 ====================
+/**
+ * 加载对话历史消息
+ * @param loadMore 是否是加载更多（true：加载下一页；false：首次加载）
+ *
+ * 功能说明：
+ * 1. 首次加载：获取最近 10 条消息
+ * 2. 加载更多：使用游标（lastCreateTime）获取更早的消息
+ * 3. 消息按创建时间升序排列
+ * 4. 自动判断是否还有更多历史
+ */
+const loadChatHistory = async (loadMore: boolean = false) => {
+  if (!appId.value) {
+    return
+  }
+
+  loadingHistory.value = true
+  try {
+    const params: API.listAppChatHistoryParams = {
+      appId: appId.value,
+      pageSize: 10,
+    }
+
+    // 如果是加载更多，传入上一页的最后一条消息的创建时间
+    if (loadMore && lastCreateTime.value) {
+      params.lastCreateTime = lastCreateTime.value
+    }
+
+    const res = await listAppChatHistory(params)
+    if (res.data.code === 0 && res.data.data) {
+      const historyData = res.data.data
+      const records = historyData.records || []
+
+      if (records.length > 0) {
+        // 转换历史消息格式
+        const historyMessages: ChatMessage[] = records
+          .map((record) => ({
+            role: record.messageType === 'user' ? 'user' : 'ai',
+            content: record.message || '',
+          }))
+          .reverse() // 因为后端返回的是倒序，需要反转
+
+        if (loadMore) {
+          // 加载更多：插入到消息列表前面
+          messages.value = [...historyMessages, ...messages.value]
+        } else {
+          // 首次加载：直接设置消息列表
+          messages.value = historyMessages
+        }
+
+        // 更新游标（最早的一条消息的创建时间）
+        lastCreateTime.value = records[records.length - 1].createTime || ''
+
+        // 判断是否还有更多历史
+        hasMoreHistory.value = records.length === 10
+
+        // 滚动到底部（仅首次加载）
+        if (!loadMore) {
+          scrollToBottom()
+        }
+      } else {
+        hasMoreHistory.value = false
+      }
+
+      console.log('对话历史加载成功，消息数量:', records.length)
+    }
+  } catch (error) {
+    console.error('加载对话历史失败:', error)
+    message.error('加载对话历史失败')
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+// ==================== 发送消息 ====================
+/**
+ * 发送用户消息并获取 AI 响应
+ *
+ * 功能说明：
+ * 1. 添加用户消息到消息列表
+ * 2. 使用 SSE（Server-Sent Events）流式传输获取 AI 响应
+ * 3. 实时更新 AI 消息内容
+ * 4. 生成完成后自动显示预览
+ */
 const handleSendMessage = async () => {
   if (!userInput.value.trim()) {
     message.warning('请输入消息内容')
@@ -460,17 +582,17 @@ const handleSendMessage = async () => {
         console.log('SSE 原始数据:', event.data)
         const parsed = JSON.parse(event.data)
         console.log('SSE 解析后的数据:', parsed)
-        
+
         // 后端返回的格式可能包含多个字段
         // {"d": content} 或 {"content": content, "explanation": explanation}
         const content = parsed.d || parsed.content || ''
-        
+
         // 如果有中文说明字段（假设字段名为 explanation 或 description）
         const explanation = parsed.explanation || parsed.description || parsed.cn || ''
-        
+
         console.log('提取的内容:', content)
         console.log('提取的说明:', explanation)
-        
+
         if (content || explanation) {
           // 拼接内容和中文说明
           let fullContent = aiContent
@@ -480,7 +602,7 @@ const handleSendMessage = async () => {
           } else {
             fullContent += content
           }
-          
+
           aiContent = fullContent
           messages.value[aiMessageIndex]!.content = aiContent
           scrollToBottom()
@@ -513,13 +635,25 @@ const handleSendMessage = async () => {
   }
 }
 
-// 选择文件
+// ==================== 文件选择 ====================
+/**
+ * 选择文件
+ * @param file 选中的文件对象
+ */
 const selectFile = (file: any) => {
   console.log('选择文件:', file)
   message.info(`查看文件：${file.name}`)
 }
 
-// 部署应用
+// ==================== 部署应用 ====================
+/**
+ * 部署应用到线上环境
+ *
+ * 功能说明：
+ * 1. 调用后端部署接口
+ * 2. 获取部署后的 URL
+ * 3. 更新应用信息
+ */
 const handleDeploy = async () => {
   if (!appInfo.value.id) {
     message.error('应用信息加载失败')
@@ -549,51 +683,110 @@ const handleDeploy = async () => {
   }
 }
 
-// 打开已部署的 URL
+// ==================== 打开已部署的 URL ====================
+/**
+ * 在新标签页中打开已部署的应用 URL
+ */
 const openDeployedUrl = () => {
   if (deployedUrl.value) {
     window.open(deployedUrl.value, '_blank')
   }
 }
 
-// 刷新预览
+// ==================== 下载代码 ====================
+/**
+ * 下载应用代码（ZIP 格式）
+ *
+ * 功能说明：
+ * 1. 调用后端下载接口
+ * 2. 从响应头获取文件名
+ * 3. 创建 Blob 对象并触发浏览器下载
+ */
+const handleDownloadCode = async () => {
+  if (!appInfo.value.id) {
+    message.error('应用信息加载失败')
+    return
+  }
+
+  downloading.value = true
+
+  try {
+    // 使用 downloadFile 工具函数下载
+    const result = await downloadFile(
+      `/app/download/${appInfo.value.id}`,
+      {},
+      `${appInfo.value.appName || 'app'}.zip`,
+    )
+
+    if (result.success) {
+      message.success(`代码下载成功：${result.filename}`)
+    }
+  } catch (error) {
+    console.error('下载失败:', error)
+    message.error('下载失败，请重试')
+  } finally {
+    downloading.value = false
+  }
+}
+
+// ==================== 刷新预览 ====================
+/**
+ * 刷新预览 iframe
+ * 用于重新加载生成的网页
+ */
 const refreshPreview = () => {
   if (previewFrame.value) {
     previewFrame.value.src = previewUrl.value
   }
 }
 
-// iframe 加载完成
+// ==================== iframe 事件处理 ====================
+/**
+ * iframe 加载完成回调
+ */
 const handleFrameLoad = () => {
   console.log('iframe 加载完成')
 }
 
-// iframe 加载错误
+/**
+ * iframe 加载错误回调
+ */
 const handleFrameError = () => {
   console.error('iframe 加载失败')
   message.error('预览加载失败，请检查后端服务是否正常运行')
 }
 
-// 监听预览状态变化
+// ==================== 监听预览状态 ====================
+/**
+ * 监听预览状态变化
+ */
 watch(showPreview, (newVal) => {
   if (newVal) {
     console.log('预览已启用，URL:', previewUrl.value)
   }
 })
 
-// 返回
+// ==================== 导航操作 ====================
+/**
+ * 返回上一页
+ */
 const goBack = () => {
   router.back()
 }
 
-// 修改应用
+/**
+ * 跳转到应用编辑页面
+ */
 const handleEditApp = () => {
   if (appInfo.value.id) {
     router.push(`/app/edit/${appInfo.value.id}`)
   }
 }
 
-// 删除应用
+/**
+ * 删除应用
+ * 删除成功后返回上一页
+ */
 const handleDeleteApp = async () => {
   if (!appInfo.value.id) {
     message.error('应用 ID 无效')
@@ -618,7 +811,16 @@ const handleDeleteApp = async () => {
   }
 }
 
-// 开始拖拽
+// ==================== 拖拽调整面板大小 ====================
+/**
+ * 开始拖拽调整面板大小
+ * @param e 鼠标事件
+ *
+ * 功能说明：
+ * 1. 记录初始状态
+ * 2. 添加鼠标移动和释放事件监听
+ * 3. 设置拖拽样式
+ */
 const startResize = (e: MouseEvent) => {
   isResizing.value = true
   startX.value = e.clientX
@@ -630,7 +832,14 @@ const startResize = (e: MouseEvent) => {
   document.body.style.overflow = 'hidden'
 }
 
-// 拖拽中
+/**
+ * 拖拽过程中调整面板大小
+ * @param e 鼠标事件
+ *
+ * 约束条件：
+ * 1. 左侧对话区域：最小宽度 400px，最大宽度 60%
+ * 2. 右侧预览区域：最小宽度 900px
+ */
 const resize = (e: MouseEvent) => {
   if (!isResizing.value || !mainContainer.value) return
 
@@ -651,7 +860,10 @@ const resize = (e: MouseEvent) => {
   }
 }
 
-// 停止拖拽
+/**
+ * 停止拖拽
+ * 清理事件监听和样式
+ */
 const stopResize = () => {
   isResizing.value = false
   document.removeEventListener('mousemove', resize)
@@ -663,14 +875,22 @@ const stopResize = () => {
 
 // 自动发送初始消息
 const sendInitialMessage = async () => {
-  // 如果是查看模式（从别人的作品进入），不自动发送消息
-  if (isViewMode.value) {
-    console.log('查看模式，不自动发送消息')
+  // 如果不是自己的应用，不自动发送
+  if (!isOwner.value) {
+    console.log('不是自己的应用，不自动发送消息')
     return
   }
 
-  const initialPrompt = route.query.prompt as string
+  // 如果有对话历史，不自动发送
+  if (messages.value.length > 0) {
+    console.log('已有对话历史，不自动发送消息')
+    return
+  }
+
+  // 如果有初始提示词，自动发送
+  const initialPrompt = appInfo.value.initPrompt || (route.query.prompt as string)
   if (initialPrompt) {
+    console.log('自动发送初始消息:', initialPrompt)
     userInput.value = initialPrompt
     await handleSendMessage()
   }
@@ -678,6 +898,10 @@ const sendInitialMessage = async () => {
 
 onMounted(async () => {
   await loadAppInfo()
+
+  // 加载对话历史
+  await loadChatHistory()
+
   // 初始化宽度
   nextTick(() => {
     if (mainContainer.value) {
@@ -686,6 +910,16 @@ onMounted(async () => {
       previewWidth.value = containerWidth - 500 - 8
     }
   })
+
+  // 如果有至少 2 条对话记录，展示网站预览
+  if (messages.value.length >= 2 && appInfo.value.codeGenType) {
+    showPreview.value = true
+    const previewBaseUrl =
+      import.meta.env.VITE_PREVIEW_BASE_URL || 'http://localhost:8200/api/static'
+    previewUrl.value = `${previewBaseUrl}/${appInfo.value.codeGenType}_${appId.value}/`
+    console.log('已有对话历史，自动展示预览:', previewUrl.value)
+  }
+
   // 等待应用信息加载完后发送初始消息
   setTimeout(() => {
     sendInitialMessage()
@@ -740,6 +974,12 @@ onMounted(async () => {
   color: #1a1a1a;
 }
 
+/* 代码生成类型标签样式 */
+.app-chat-page__app-info .code-gen-type-tag {
+  margin-left: 4px;
+  transform: translateY(-1px);
+}
+
 .app-chat-page__header-right {
   display: flex;
   gap: 12px;
@@ -771,6 +1011,19 @@ onMounted(async () => {
   border: none;
   color: #fff;
   border-radius: 20px;
+}
+
+.app-chat-page__download-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border: none;
+  color: #fff;
+  border-radius: 20px;
+  margin-left: 8px;
+}
+
+.app-chat-page__download-btn:hover {
+  background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+  transform: translateY(-2px);
 }
 
 .app-chat-page__preview-btn {
@@ -807,6 +1060,20 @@ onMounted(async () => {
   flex-direction: column;
   gap: 20px;
   height: 100%;
+}
+
+.app-chat-page__load-more {
+  text-align: center;
+  padding: 12px 0;
+}
+
+.app-chat-page__load-more .ant-btn-link {
+  color: #667eea;
+  font-size: 14px;
+}
+
+.app-chat-page__load-more .ant-btn-link:hover {
+  color: #764ba2;
 }
 
 .app-chat-page__message {

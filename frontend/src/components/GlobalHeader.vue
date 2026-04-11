@@ -54,7 +54,8 @@ type HeaderMenuItem = {
   roles?: string[]
 }
 
-// 顶部导航菜单配置（写死在组件内部）
+// ==================== 菜单配置 ====================
+// 顶部导航菜单配置（根据用户角色过滤显示）
 const HEADER_MENU_ITEMS: HeaderMenuItem[] = [
   { key: 'home', label: '首页', path: '/' },
   {
@@ -67,6 +68,12 @@ const HEADER_MENU_ITEMS: HeaderMenuItem[] = [
     key: 'admin-app-manage',
     label: '应用管理',
     path: '/admin/appManage',
+    roles: ['admin'],
+  },
+  {
+    key: 'admin-chat-history-manage',
+    label: '对话管理',
+    path: '/admin/chatHistoryManage',
     roles: ['admin'],
   },
 ]
