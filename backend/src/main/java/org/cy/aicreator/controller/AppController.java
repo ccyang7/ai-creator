@@ -16,6 +16,8 @@ import org.cy.aicreator.constant.UserConstant;
 import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
 import org.cy.aicreator.exception.ThrowUtils;
+import org.cy.aicreator.litmer.annotation.RateLimit;
+import org.cy.aicreator.litmer.enums.RateLimitType;
 import org.cy.aicreator.model.dto.app.*;
 import org.cy.aicreator.model.entity.App;
 import org.cy.aicreator.model.entity.User;
@@ -23,6 +25,7 @@ import org.cy.aicreator.model.vo.AppVO;
 import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.ProjectDownloadService;
 import org.cy.aicreator.service.UserService;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -180,6 +183,11 @@ public class AppController {
      * @return 精选应用分页列表（含用户脱敏信息）
      */
     @PostMapping("/featured/list/page")
+    @Cacheable(
+            value = "feature-app",
+            key = "T(org.cy.aicreator.utils.CacheKeyUtils).generateKey(#appQueryDTO)",
+            condition = "#appQueryDTO.pageNum<=10"
+    )
     public BaseResponse<Page<AppVO>> listFeaturedAppByPage(@RequestBody AppQueryDTO appQueryDTO) {
         ThrowUtils.throwIf(appQueryDTO == null, ErrorCode.PARAM_ERROR);
         long pageNum = appQueryDTO.getPageNum();
@@ -291,6 +299,7 @@ public class AppController {
      * @return 流式输出的代码生成结果
      */
     @GetMapping(value = "/chat/generate/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(limitType = RateLimitType.USER,rate = 5,rateInterval = 60,message = "请求过于频繁，稍后再试！")
     public Flux<ServerSentEvent<String>> chatToGenerateCode(
             @RequestParam Long appId,
             @RequestParam String message,
