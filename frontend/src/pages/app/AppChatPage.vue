@@ -139,6 +139,44 @@
 
         <!-- 用户消息输入框 -->
         <div class="app-chat-page__input-area">
+          <!-- 选中元素信息展示 -->
+          <a-alert
+            v-if="selectedElementInfo"
+            class="app-chat-page__element-alert"
+            type="info"
+            closable
+            @close="clearSelectedElement"
+          >
+            <template #message>
+              <div class="selected-element-info">
+                <div class="element-header">
+                  <span class="element-tag">
+                    选中元素：{{ selectedElementInfo.tagName.toLowerCase() }}
+                  </span>
+                  <span v-if="selectedElementInfo.id" class="element-id">
+                    #{{ selectedElementInfo.id }}
+                  </span>
+                  <span v-if="selectedElementInfo.className" class="element-class">
+                    .{{ selectedElementInfo.className.split(' ').join('.') }}
+                  </span>
+                </div>
+                <div class="element-details">
+                  <div v-if="selectedElementInfo.textContent" class="element-item">
+                    内容: {{ selectedElementInfo.textContent.substring(0, 50) }}
+                    {{ selectedElementInfo.textContent.length > 50 ? '...' : '' }}
+                  </div>
+                  <div v-if="selectedElementInfo.pagePath" class="element-item">
+                    页面路径: {{ selectedElementInfo.pagePath }}
+                  </div>
+                  <div class="element-item">
+                    选择器:
+                    <code class="element-selector-code">{{ selectedElementInfo.selector }}</code>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </a-alert>
+
           <a-tooltip v-if="!isOwner" title="无法在别人的作品下对话哦~" placement="top">
             <div class="app-chat-page__input-wrapper app-chat-page__input-wrapper--disabled">
               <a-textarea
@@ -165,10 +203,6 @@
               <a-button class="app-chat-page__action-btn" disabled>
                 <PaperClipOutlined />
                 上传
-              </a-button>
-              <a-button class="app-chat-page__action-btn" disabled>
-                <EditOutlined />
-                编辑
               </a-button>
               <a-button class="app-chat-page__action-btn" disabled>
                 <EditOutlined />
@@ -201,15 +235,27 @@
           <a-tag v-if="showPreview" color="green" class="app-chat-page__preview-status">
             已加载
           </a-tag>
-          <a-button
-            v-if="generatedCode && showPreview"
-            type="link"
-            class="app-chat-page__refresh-btn"
-            @click="refreshPreview"
-          >
-            <ReloadOutlined />
-            刷新
-          </a-button>
+          <div class="app-chat-page__preview-actions">
+            <a-button
+              v-if="isOwner && showPreview"
+              type="link"
+              :danger="isEditMode"
+              @click="toggleEditMode"
+              :class="{ 'edit-mode-active': isEditMode }"
+            >
+              <EditOutlined />
+              {{ isEditMode ? '退出编辑' : '可视化编辑' }}
+            </a-button>
+            <a-button
+              v-if="generatedCode && showPreview"
+              type="link"
+              class="app-chat-page__refresh-btn"
+              @click="refreshPreview"
+            >
+              <ReloadOutlined />
+              刷新
+            </a-button>
+          </div>
         </div>
         <div class="app-chat-page__preview-content">
           <div v-if="!showPreview" class="app-chat-page__preview-empty">
@@ -241,7 +287,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import MarkdownIt from 'markdown-it'
@@ -269,6 +315,7 @@ import { downloadFile } from '@/request'
 import { listAppChatHistory } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import CodeGenTypeTag from '@/components/CodeGenTypeTag.vue'
+import { VisualEditor, type ElementInfo } from '@/utils/visualEditor'
 
 const route = useRoute()
 const router = useRouter()
@@ -309,6 +356,16 @@ const deploying = ref(false)
 // 下载相关
 const downloading = ref(false)
 
+// 可视化编辑相关
+const isEditMode = ref(false)
+const selectedElementInfo = ref<ElementInfo | null>(null)
+const visualEditor = new VisualEditor({
+  onElementSelected: (elementInfo: ElementInfo) => {
+    selectedElementInfo.value = elementInfo
+    message.success(`已选中元素：${elementInfo.tagName.toLowerCase()}`)
+  },
+})
+
 // ==================== 权限控制 ====================
 const isOwner = ref(false) // 是否是应用的所有者（本人或管理员）
 
@@ -339,6 +396,34 @@ const scrollToBottom = () => {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
   })
+}
+
+// ==================== 可视化编辑相关 ====================
+/**
+ * 切换编辑模式
+ */
+const toggleEditMode = () => {
+  if (!previewFrame.value) {
+    message.warning('请等待页面加载完成')
+    return
+  }
+
+  const newEditMode = visualEditor.toggleEditMode()
+  isEditMode.value = newEditMode
+
+  if (newEditMode) {
+    message.info('已进入编辑模式，鼠标悬浮在元素上可查看，点击选中元素')
+  } else {
+    clearSelectedElement()
+  }
+}
+
+/**
+ * 清除选中的元素
+ */
+const clearSelectedElement = () => {
+  selectedElementInfo.value = null
+  visualEditor.clearSelection()
 }
 
 // ==================== Markdown 渲染 ====================
@@ -515,14 +600,36 @@ const handleSendMessage = async () => {
     return
   }
 
+  let finalMessage = userInput.value
+  if (selectedElementInfo.value) {
+    let elementContext = `\n\n选中元素信息：`
+    if (selectedElementInfo.value.pagePath) {
+      elementContext += `\n- 页面路径: ${selectedElementInfo.value.pagePath}`
+    }
+    elementContext += `\n- 标签: ${selectedElementInfo.value.tagName.toLowerCase()}\n- 选择器: ${selectedElementInfo.value.selector}`
+    if (selectedElementInfo.value.textContent) {
+      elementContext += `\n- 当前内容: ${selectedElementInfo.value.textContent.substring(0, 100)}`
+    }
+    finalMessage += elementContext
+  }
+
   // 添加用户消息
   messages.value.push({
     role: 'user',
     content: userInput.value,
   })
 
-  const userMessage = userInput.value
+  const userMessage = finalMessage
   userInput.value = ''
+
+  // 发送消息后，清除选中元素并退出编辑模式
+  if (selectedElementInfo.value) {
+    clearSelectedElement()
+    if (isEditMode.value) {
+      toggleEditMode()
+    }
+  }
+
   isLoading.value = true
   scrollToBottom()
 
@@ -746,6 +853,11 @@ const refreshPreview = () => {
  */
 const handleFrameLoad = () => {
   console.log('iframe 加载完成')
+  // 初始化可视化编辑器
+  if (previewFrame.value) {
+    visualEditor.init(previewFrame.value)
+    visualEditor.onIframeLoad()
+  }
 }
 
 /**
@@ -920,10 +1032,22 @@ onMounted(async () => {
     console.log('已有对话历史，自动展示预览:', previewUrl.value)
   }
 
+  // 监听 iframe 消息
+  window.addEventListener('message', (event) => {
+    visualEditor.handleIframeMessage(event)
+  })
+
   // 等待应用信息加载完后发送初始消息
   setTimeout(() => {
     sendInitialMessage()
   }, 500)
+})
+
+// 组件卸载时清理监听器
+onUnmounted(() => {
+  // 清理拖拽相关事件监听
+  document.removeEventListener('mousemove', resize)
+  document.removeEventListener('mouseup', stopResize)
 })
 </script>
 
@@ -1328,6 +1452,60 @@ onMounted(async () => {
   border-radius: 0 0 24px 24px;
 }
 
+/* 选中元素信息样式 */
+.app-chat-page__element-alert {
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
+.selected-element-info {
+  line-height: 1.4;
+}
+
+.element-header {
+  margin-bottom: 8px;
+}
+
+.element-details {
+  margin-top: 8px;
+}
+
+.element-item {
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.element-item:last-child {
+  margin-bottom: 0;
+}
+
+.element-tag {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #007bff;
+}
+
+.element-id {
+  color: #28a745;
+  margin-left: 4px;
+}
+
+.element-class {
+  color: #ffc107;
+  margin-left: 4px;
+}
+
+.element-selector-code {
+  font-family: 'Monaco', 'Menlo', monospace;
+  background: #f6f8fa;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #d73a49;
+  border: 1px solid #e1e4e8;
+}
+
 .app-chat-page__input-wrapper {
   margin-bottom: 12px;
 }
@@ -1457,8 +1635,39 @@ onMounted(async () => {
   border-radius: 12px;
 }
 
-.app-chat-page__refresh-btn {
+.app-chat-page__preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
+}
+
+.app-chat-page__preview-actions .ant-btn-link {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #667eea;
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.app-chat-page__preview-actions .ant-btn-link:hover {
+  background: rgba(102, 126, 234, 0.08);
+  color: #667eea;
+}
+
+.edit-mode-active {
+  background-color: #52c41a !important;
+  border-color: #52c41a !important;
+  color: white !important;
+}
+
+.edit-mode-active:hover {
+  background-color: #73d13d !important;
+  border-color: #73d13d !important;
+  color: white !important;
+}
+
+.app-chat-page__refresh-btn {
   padding: 4px 12px;
   font-size: 13px;
   color: #667eea;
