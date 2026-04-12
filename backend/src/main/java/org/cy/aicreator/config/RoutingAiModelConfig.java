@@ -1,6 +1,6 @@
 package org.cy.aicreator.config;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -32,7 +32,7 @@ public class RoutingAiModelConfig {
      */
     @Bean
     @Scope("prototype")
-    public ChatLanguageModel routingChatModelPrototype() {
+    public ChatModel routingChatModelPrototype() {
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)

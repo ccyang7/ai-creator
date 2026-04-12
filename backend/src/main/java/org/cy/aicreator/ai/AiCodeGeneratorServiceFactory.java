@@ -6,24 +6,20 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.aspectj.apache.bcel.classfile.Code;
 import org.cy.aicreator.ai.tools.FileWriteTool;
 import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
 import org.cy.aicreator.model.enums.GenerTypeEnum;
 import org.cy.aicreator.service.ChatHistoryService;
 import org.cy.aicreator.utils.SpringContextUtil;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
 /**
  * AI 代码生成服务 工厂
@@ -33,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 public class AiCodeGeneratorServiceFactory {
 
     @Resource(name = "openAiChatModel")
-    private ChatLanguageModel chatLanguageModel;
+    private ChatModel chatLanguageModel;
 
     @Resource
     private RedisChatMemoryStore redisChatMemoryStore;
@@ -65,11 +61,11 @@ public class AiCodeGeneratorServiceFactory {
             // HTML, 多文件模式->默认模型
             case HTML, MULTI_FILE -> {
                 // 采用多例模式，避免并发问题
-                StreamingChatLanguageModel streamingChatModelPrototype = SpringContextUtil
-                        .getBean("streamingChatModelPrototype", StreamingChatLanguageModel.class);
+                StreamingChatModel streamingChatModelPrototype = SpringContextUtil
+                        .getBean("streamingChatModelPrototype", StreamingChatModel.class);
                 yield AiServices.builder(AiCodeGeneratorService.class)
-                        .chatLanguageModel(chatLanguageModel)
-                        .streamingChatLanguageModel(streamingChatModelPrototype)
+                        .chatModel(chatLanguageModel)
+                        .streamingChatModel(streamingChatModelPrototype)
                         .chatMemory(chatMemory)
                         .build();
             }
@@ -77,11 +73,11 @@ public class AiCodeGeneratorServiceFactory {
             // Vue工程模式->推理流式模型（带工具调用）
             case VUE_PROJECT -> {
                 // 采用多例模式，避免并发问题
-                StreamingChatLanguageModel reasoningStreamingChatModelPrototype = SpringContextUtil
-                        .getBean("reasoningStreamingChatModelPrototype", StreamingChatLanguageModel.class);
+                StreamingChatModel reasoningStreamingChatModelPrototype = SpringContextUtil
+                        .getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
                 yield AiServices.builder(AiCodeGeneratorService.class)
-                        .chatLanguageModel(chatLanguageModel)
-                        .streamingChatLanguageModel(reasoningStreamingChatModelPrototype)
+                        .chatModel(chatLanguageModel)
+                        .streamingChatModel(reasoningStreamingChatModelPrototype)
                         .chatMemoryProvider(memoryId -> chatMemory)
                         .tools(new FileWriteTool())
                         .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage
