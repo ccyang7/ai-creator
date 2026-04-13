@@ -183,11 +183,6 @@ public class AppController {
      * @return 精选应用分页列表（含用户脱敏信息）
      */
     @PostMapping("/featured/list/page")
-    @Cacheable(
-            value = "feature-app",
-            key = "T(org.cy.aicreator.utils.CacheKeyUtils).generateKey(#appQueryDTO)",
-            condition = "#appQueryDTO.pageNum<=10"
-    )
     public BaseResponse<Page<AppVO>> listFeaturedAppByPage(@RequestBody AppQueryDTO appQueryDTO) {
         ThrowUtils.throwIf(appQueryDTO == null, ErrorCode.PARAM_ERROR);
         long pageNum = appQueryDTO.getPageNum();

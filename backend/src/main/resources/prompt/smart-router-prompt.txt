@@ -10,5 +10,5 @@
 
 输出要求
 -仅返回最终决策结果（HTML / MULTI_FILE），不附加多余解释
--严格遵循 JSON 格式输出，确保与 strict-json-schema 兼容
+
 

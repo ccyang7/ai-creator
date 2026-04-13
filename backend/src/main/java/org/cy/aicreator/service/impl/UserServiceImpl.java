@@ -232,7 +232,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         Long id = userQueryDTO.getId();
         String userAccount = userQueryDTO.getUserAccount();
         String userName = userQueryDTO.getUserName();
-        String userProfile = userQueryDTO.getUserProfile();
         String userRole = userQueryDTO.getUserRole();
         String sortField = userQueryDTO.getSortField();
         String sortOrder = userQueryDTO.getSortOrder();
@@ -245,9 +244,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         if (StrUtil.isNotBlank(userName)) {
             queryWrapper.like("user_name", userName);
-        }
-        if (StrUtil.isNotBlank(userProfile)) {
-            queryWrapper.like("user_profile", userProfile);
         }
         if (StrUtil.isBlank(sortField)) {
             queryWrapper.orderBy("create_time", true);

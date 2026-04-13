@@ -147,6 +147,18 @@
             <version>3.50.0</version>
         </dependency>
 
+        <!--性能监控-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <version>1.16.4</version>
+        </dependency>
+
+
 
         <!-- Selenium 网页截图依赖 -->
         <dependency>

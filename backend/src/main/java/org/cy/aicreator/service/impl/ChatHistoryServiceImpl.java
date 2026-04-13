@@ -175,13 +175,16 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         String sortOrder = chatHistoryQueryDTO.getSortOrder();
         // 拼接查询条件
         queryWrapper.eq("id", id)
-                .like("message", message)
                 .eq("message_type", messageType)
                 .eq("app_id", appId)
                 .eq("user_id", userId);
         // 游标查询逻辑 - 只使用 createTime 作为游标
         if (lastCreateTime != null) {
             queryWrapper.lt("create_time", lastCreateTime);
+        }
+
+        if(StrUtil.isNotBlank(message)){
+            queryWrapper.like("message", message);
         }
         // 排序
         if (StrUtil.isNotBlank(sortField)) {

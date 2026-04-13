@@ -11,6 +11,7 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.cy.aicreator.ai.guardrail.PromptSafetyInputGuardrail;
 import org.cy.aicreator.ai.tools.FileWriteTool;
 import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
@@ -67,6 +68,7 @@ public class AiCodeGeneratorServiceFactory {
                         .chatModel(chatLanguageModel)
                         .streamingChatModel(streamingChatModelPrototype)
                         .chatMemory(chatMemory)
+                        .inputGuardrails(new PromptSafetyInputGuardrail())
                         .build();
             }
 
@@ -79,6 +81,7 @@ public class AiCodeGeneratorServiceFactory {
                         .chatModel(chatLanguageModel)
                         .streamingChatModel(reasoningStreamingChatModelPrototype)
                         .chatMemoryProvider(memoryId -> chatMemory)
+                        .inputGuardrails(new PromptSafetyInputGuardrail())
                         .tools(new FileWriteTool())
                         .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage
                                 .from(toolExecutionRequest, "没有找到此工具：" + toolExecutionRequest.name()))

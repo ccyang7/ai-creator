@@ -25,6 +25,8 @@ import org.cy.aicreator.model.enums.ChatHistoryMessageTypeEnum;
 import org.cy.aicreator.model.enums.GenerTypeEnum;
 import org.cy.aicreator.model.vo.AppVO;
 import org.cy.aicreator.model.vo.UserVO;
+import org.cy.aicreator.monitor.MonitorContext;
+import org.cy.aicreator.monitor.MonitorContextHolder;
 import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.ChatHistoryService;
 import org.cy.aicreator.service.ScreenshotService;
@@ -310,13 +312,23 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 通过校验后，添加用户消息到对话历史
         chatHistoryService.addChatMessage(appId, loginUser.getId(), message, ChatHistoryMessageTypeEnum.USER.getValue());
 
+        // 设置监控上下文
+        MonitorContext monitorContext = MonitorContext.builder()
+                .userId(loginUser.getId().toString())
+                .appId(appId.toString())
+                .build();
+        MonitorContextHolder.setContext(monitorContext);
         // 调用AI生成代码
         String initPrompt = app.getInitPrompt();
         String userMessage = initPrompt + "\n\n用户需求：" + message;
         Flux<String> codeStream = aiCreatorFacade.generateAndSaveCodeStream(userMessage, generTypeEnum, appId);
 
         // 收集AI响应内容，完成后保存对话历史
-        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, generTypeEnum);
+        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, generTypeEnum)
+                .doFinally(signalType -> {
+                    // 清理监控上下文
+                    MonitorContextHolder.clearContext();
+                });
     }
 
     /**

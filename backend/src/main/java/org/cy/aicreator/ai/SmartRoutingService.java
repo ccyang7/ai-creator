@@ -21,7 +21,7 @@ public interface SmartRoutingService {
 
 
     /**
-     * 根据用户需求智能选择应用名称
+     * 根据用户需求智能生成应用名称
      *
      * @param userPrompt 用户输入的需求描述
      * @return 智能生成的应用名称
