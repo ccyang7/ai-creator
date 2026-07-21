@@ -31,6 +31,7 @@ import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.ChatHistoryService;
 import org.cy.aicreator.service.ScreenshotService;
 import org.cy.aicreator.service.UserService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -57,6 +58,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private UserService userService;
 
     @Resource
+    private ScreenshotService screenshotService;
+    @Resource
     private AiCreatorFacade aiCreatorFacade;
 
     @Resource
@@ -67,6 +70,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private SmartRoutingServiceFactory smartRoutingServiceFactory;
+
+    @Value("${code.deploy-host:http://localhost}")
+    private String deployHost;
+
+
 
     /**
      * 创建应用
@@ -401,7 +409,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
 
         // 10. 构建应用访问 URL
-        String appDeployUrl = String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        String appDeployUrl = String.format("%s/%s/",deployHost, deployKey);
         // 11. 异步生成截图并更新应用封面
         takeScreenshotAsync(appId, appDeployUrl);
         return appDeployUrl;
@@ -409,8 +417,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
 
-    @Resource
-    private ScreenshotService screenshotService;
+
 
     /**
      * 异步生成应用截图并更新封面

@@ -34,4 +34,7 @@ build/
 
 ### CUSTOM ###
 application-local.yml
+application-prod.yml
 tmp
+docs/
+AGENTS.md

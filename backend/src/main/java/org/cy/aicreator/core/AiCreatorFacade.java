@@ -83,19 +83,20 @@ public class AiCreatorFacade {
         // 创建一个StringBuilder对象，用于实时收集代码片段
         StringBuilder codeBuilder = new StringBuilder();
         // 实时收集代码片段
-        return resultStream.doOnNext(codeBuilder::append).doOnComplete(() -> {
-            try {
-                // 流式输出完成后，解析代码并保存文件
-                // 代码解析执行器
-                Object execute = CodeParserExecutor.execute(outputType, codeBuilder.toString());
-                // 代码保存执行器
-                File dir = CodeFileSaverExecutor.executeSaver(execute, outputType, appId);
-                log.info("代码保存成功：{}", dir.getAbsolutePath());
-            } catch (Exception e) {
-                log.error("代码保存失败：{}", e.getMessage());
-            }
+        return resultStream.doOnNext(codeBuilder::append)
+                .doOnComplete(() -> {
+                    try {
+                        // 流式输出完成后，解析代码并保存文件
+                        // 代码解析执行器
+                        Object execute = CodeParserExecutor.execute(outputType, codeBuilder.toString());
+                        // 代码保存执行器
+                        File dir = CodeFileSaverExecutor.executeSaver(execute, outputType, appId);
+                        log.info("代码保存成功：{}", dir.getAbsolutePath());
+                    } catch (Exception e) {
+                        log.error("代码保存失败：{}", e.getMessage());
+                    }
 
-        });
+                });
     }
 
     /**

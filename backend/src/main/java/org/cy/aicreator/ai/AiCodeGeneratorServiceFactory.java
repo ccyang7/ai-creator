@@ -71,6 +71,7 @@ public class AiCodeGeneratorServiceFactory {
                         .inputGuardrails(new PromptSafetyInputGuardrail())
                         .build();
             }
+            
 
             // Vue工程模式->推理流式模型（带工具调用）
             case VUE_PROJECT -> {

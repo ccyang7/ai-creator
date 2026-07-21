@@ -41,9 +41,7 @@ public class WebScreenshotUtils {
         webDriver.quit();
     }
 
-    /**
-     * 初始化 Edge 浏览器驱动
-     */
+
     /**
      * 初始化 Chrome 浏览器驱动
      */

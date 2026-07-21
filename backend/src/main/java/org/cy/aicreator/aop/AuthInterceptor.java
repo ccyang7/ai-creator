@@ -26,6 +26,7 @@ public class AuthInterceptor {
 
     /**
      * 拦截
+     * 
      * @param joinPoint 切入点
      * @param authCheck 权限校验
      */
@@ -36,7 +37,7 @@ public class AuthInterceptor {
         HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-       // 当前方法的所需权限
+        // 当前方法的所需权限
         UserRoleEnum mustRoleEnum = UserRoleEnum.getEnumByValue(mustRole);
         // 不需要权限，直接放行
         if (mustRoleEnum == null) {
@@ -55,6 +56,5 @@ public class AuthInterceptor {
         // 通过普通用户的权限校验，放行
         return joinPoint.proceed();
     }
-
 
 }
