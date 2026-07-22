@@ -37,4 +37,7 @@ application-local.yml
 application-prod.yml
 tmp
 docs/
+!docs/
+docs/*
+!docs/PROJECT_HIGHLIGHTS_AND_RESUME.md
 AGENTS.md

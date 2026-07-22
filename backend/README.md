@@ -1,102 +1,120 @@
-# AI Creator
+# AI Creator 智能代码生成平台
 
-> 基于 AI 大语言模型的智能代码生成平台 — 用自然语言描述需求，自动生成完整前端代码。
+> 基于 Spring Boot 和 LangChain4j 的 AI 前端代码生成平台，支持自然语言生成、流式输出、在线预览、多轮修改、部署和源码下载。
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.9-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Maven](https://img.shields.io/badge/Maven-3.8+-C71A36.svg)](https://maven.apache.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1.svg)](https://dev.mysql.com/)
 
----
+## 项目介绍
 
-## 项目简介
+AI Creator 是一个面向前端页面生成场景的个人项目。用户输入网站需求后，系统通过 AI 判断代码生成类型并创建应用，再以 SSE 流式返回生成过程，最终将代码保存为可预览的项目文件。
 
-**AI Creator** 允许用户通过自然语言描述一个网站，系统自动调用多种 LLM（DeepSeek、Qwen）生成完整的前端代码。支持 **两种生成模式**：HTML 单文件、HTML+CSS+JS 多文件。提供从代码生成、流式预览、一键部署、ZIP 下载、自动截图到多轮对话优化的全生命周期管理。
+用户可以围绕同一个应用继续对话修改代码，也可以部署生成结果、自动截取应用封面或下载 ZIP 源码。本项目主要用于个人学习、毕业设计和校招作品展示，重点实践 AI 应用接入、流式响应、会话记忆和文件生成等完整后端流程。
 
-## 核心能力
+> 本仓库为 Java 后端，配套 Vue 3 前端位于独立仓库。
 
-| 能力 | 说明 |
-|------|------|
-| 🧠 **智能代码生成** | 基于 LangChain4j 集成 DeepSeek-Chat / DeepSeek-Reasoner / Qwen3.5-Plus 多种 LLM |
-| 🎯 **两种生成模式** | HTML 单文件、多文件（HTML+CSS+JS） |
-| 🚦 **AI 智能路由** | 轻量 Qwen-Turbo 自动判断最佳生成模式并生成应用名称 |
-| 📡 **流式响应** | 基于 SSE（Server-Sent Events）实时推送代码生成进度 |
-| 🚀 **一键部署** | 生成代码自动部署到 Nginx，生成唯一 6 位 `deployKey` 访问 URL |
-| 📸 **自动截图** | Selenium 无头浏览器截图 + 压缩 + 上传腾讯云 COS 作为封面 |
-| 📦 **代码下载** | 支持将项目源码打包为 ZIP 下载 |
-| 💬 **多轮对话** | Redis 持久化对话记忆（窗口 20 条），支持迭代优化代码 |
-| 🔒 **安全限流** | Redisson 分布式限流（API / 用户 / IP 三级）+ Prompt 注入防护 |
-| 👮 **权限控制** | AOP + `@AuthCheck` 注解驱动的角色权限校验 |
-| 📊 **全面监控** | Micrometer + Prometheus + Grafana 监控请求量、Token 消耗、响应时间 |
-| 📖 **API 文档** | Knife4j / Swagger UI 在线接口文档 |
+## 核心功能
+
+| 功能 | 说明 |
+| --- | --- |
+| 智能创建应用 | 根据初始需求选择代码生成类型，并自动生成应用名称 |
+| 三种生成方式 | 支持 HTML 单文件、HTML/CSS/JS 多文件 |
+| 流式代码生成 | 使用 Reactor Flux 和 SSE 实时返回 AI 生成内容 |
+| 多轮对话 | 保存用户与 AI 消息，结合 Redis 对话记忆继续修改代码 |
+| 应用预览 | 按应用和生成类型保存代码，提供静态资源访问能力 |
+| 部署与截图 | 复制生成文件到部署目录，并异步截图上传腾讯云 COS |
+| 源码下载 | 将生成项目过滤后打包为 ZIP 文件下载 |
+| 权限与限流 | 校验登录、应用所有权和管理员角色，并限制 AI 接口调用频率 |
+
+## 核心业务流程
+
+```mermaid
+flowchart TD
+    A[用户输入应用需求] --> B[AI 选择生成类型并生成应用名称]
+    B --> C[保存应用]
+    C --> D[发起 SSE 代码生成请求]
+    D --> E[登录、限流和应用所有权校验]
+    E --> F[保存用户消息并加载对话记忆]
+    F --> G[获取当前应用的 AI Service]
+    G --> H{代码生成类型}
+
+    H -->|HTML| I[流式生成单文件代码]
+    H -->|MULTI_FILE| J[流式生成 HTML、CSS、JS]
+
+    I --> L[SSE 实时返回生成内容]
+    J --> L
+    L --> M{生成完成后处理}
+    M -->|HTML / MULTI_FILE| N[解析代码块并保存文件]
+    M -->|VUE_PROJECT| O[使用已写入的工程文件]
+    N --> P[保存 AI 回复记录]
+    O --> P
+    P --> Q[在线预览]
+    Q --> R{下一步操作}
+    R -->|继续修改| D
+    R -->|部署| S[复制文件并生成访问地址]
+    R -->|下载| T[打包 ZIP 源码]
+    S --> U[异步截图并上传 COS]
+```
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| **语言** | Java 21 |
-| **框架** | Spring Boot 3.5.9 |
-| **构建** | Maven |
-| **ORM** | MyBatis-Flex 1.11.6 |
-| **数据库** | MySQL 8.x |
-| **缓存** | Redis + Caffeine（内存级 AI 服务缓存） |
-| **AI 框架** | LangChain4j 1.1.0 |
-| **AI 模型** | DeepSeek-Chat / DeepSeek-Reasoner / Qwen3.5-Plus / Qwen-Turbo |
-| **流式** | Reactor (Flux) + SSE |
-| **会话** | Spring Session + Redis |
-| **限流** | Redisson |
-| **API 文档** | SpringDoc OpenAPI 3 + Knife4j 4.4.0 |
-| **对象存储** | 腾讯云 COS |
-| **截图** | Selenium 4.33.0 + ChromeDriver (Headless) |
-| **工具库** | Hutool 5.8.38 |
-| **前端** | Vue 3.5 + TypeScript + Vite 7 + Ant Design Vue 4 + Pinia |
+| 类型 | 技术 |
+| --- | --- |
+| 后端 | Java 21、Spring Boot 3.5.9、Spring MVC、Spring AOP |
+| AI 应用 | LangChain4j、OpenAI-compatible 模型接口 |
+| 数据访问 | MyBatis-Flex、MySQL 8 |
+| 缓存与会话 | Redis、Spring Session、Caffeine |
+| 流式处理 | Reactor Flux、SSE |
+| 限流 | Redisson |
+| 文件与截图 | 腾讯云 COS、Selenium、Chrome |
+| 接口与监控 | Knife4j/OpenAPI、Micrometer、Prometheus |
+| 前端 | Vue 3、TypeScript、Vite、Ant Design Vue |
 
-## 架构概览
+## 实现特点
 
+- 使用 `SmartRoutingService` 根据初始需求选择生成类型并生成应用名称。
+
+- 使用 `AiCreatorFacade` 统一编排模型调用、流式收集、代码解析和文件保存。
+
+- HTML 与多文件模式使用解析器和保存器处理代码块，Vue 模式通过 `FileWriteTool` 写入工程文件。
+
+- 每个应用使用独立的 Redis 对话窗口，最多保留 20 条消息，并从数据库加载历史记录。
+
+- AI Service 按“应用 ID + 生成类型”缓存在 Caffeine 中，减少重复创建服务实例。
+
+- SSE 普通数据帧统一包装为 `{"d":"..."}`，完成后发送 `done` 事件。
+
+- 部署后使用 Java 21 虚拟线程异步执行网页截图和 COS 上传。
+
+  
+
+## 项目结构
+
+```text
+src/main/java/org/cy/aicreator/
+├── controller/     # 用户、应用、聊天记录和静态资源接口
+├── service/        # 应用业务、部署、截图和下载编排
+├── ai/             # AI Service、模型工厂、路由和文件工具
+├── core/           # 生成门面、代码解析、保存和流处理
+├── litmer/         # 基于 Redisson 的注解限流
+├── mapper/         # MyBatis-Flex 数据访问
+├── model/          # Entity、DTO、VO 和枚举
+├── config/         # 模型、Redis、Session、COS 等配置
+└── common/         # 通用响应与基础模型
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Controller Layer                      │
-│   AppController │ UserController │ ChatHistoryController │
-│   AppStaticResourceController                           │
-│   AOP: AuthInterceptor + RateLimitAspect                 │
-├─────────────────────────────────────────────────────────┤
-│                     Service Layer                        │
-│   AppService │ UserService │ ChatHistoryService           │
-│   ScreenshotService │ ProjectDownloadService             │
-├─────────────────────────────────────────────────────────┤
-│                   Core Layer (Facade)                    │
-│   AiCreatorFacade — 统一入口：生成 → 解析 → 保存        │
-│   CodeParserExecutor (策略) │ CodeFileSaverExecutor      │
-│   StreamHandlerExecutor                                   │
-├─────────────────────────────────────────────────────────┤
-│                       AI Layer                           │
-│   AiCodeGeneratorServiceFactory (Caffeine 缓存)          │
-│   SmartRoutingServiceFactory                              │
-│   LangChain4j AiServices + @SystemMessage                      │
-│   PromptSafetyInputGuardrail                                     │
-├─────────────────────────────────────────────────────────┤
-│                    Infrastructure                        │
-│   MySQL │ Redis │ Redisson │ Caffeine │ COS │ Selenium   │
-│   Prometheus │ Grafana                                    │
-└─────────────────────────────────────────────────────────┘
-```
-
-### AI 模型分工
-
-| 模型 | 用途 |
-|------|------|
-| **Qwen-Turbo** | 智能路由：判断生成模式 + 生成应用名称 |
-| **DeepSeek-Chat** | HTML 单文件 / 多文件生成（非流式结构输出） |
-| **Qwen3.5-Plus** | HTML / 多文件生成（流式 SSE 推送） |
 
 ## 快速开始
 
 ### 环境要求
 
-- **JDK 21+**
-- **Maven 3.8+**
-- **MySQL 8.0+**
-- **Redis 6.0+**
-- **Chrome/Chromium**（用于截图功能，可选）
+- JDK 21+
+- MySQL 8+
+- Redis 6+
+- 可用的 OpenAI-compatible 模型服务
+- Chrome/Chromium（截图功能需要）
+- 腾讯云 COS（应用封面上传需要）
 
 ### 1. 初始化数据库
 
@@ -104,164 +122,56 @@
 mysql -u root -p < sql/create_table.sql
 ```
 
-### 2. 配置文件
+### 2. 配置开发环境
 
-项目的敏感配置（数据库密码、Redis 密码、API Key 等）已从 `application.yml` 中移除，改为 Spring 占位符（如 `${DB_PASSWORD:}`）。实际值存放在 `application-local.yml`（本地开发）和 `application-prod.yml`（生产环境）中，这两个文件已加入 `.gitignore`，需要自行创建。
+在 `src/main/resources/` 下创建 `application-local.yml`，配置以下内容：
 
-**`src/main/resources/application-local.yml`** 示例：
+- MySQL 数据源
+- Redis 地址和密码
+- AI 模型的 API Key、Base URL 和模型名称
+- 腾讯云 COS 的 SecretId、SecretKey、region 和 bucket
 
-```yaml
-# 数据库与 Redis 配置（application.yml 中对应占位符的实际值）
-spring:
-  datasource:
-    password: your-db-password
-  data:
-    redis:
-      host: your-redis-host
-      password: your-redis-password
+该文件已被 Git 忽略，请勿提交真实账号、密码或 API Key。公共配置默认启用 `local` Profile。
 
-# AI 模型配置
-langchain4j:
-  open-ai:
-    chat-model:
-      api-key: your-deepseek-api-key
-      base-url: https://api.deepseek.com
-      model-name: deepseek-chat
-      max-tokens: 8192
-      read-timeout: 600
-    streaming-chat-model:
-      api-key: your-qwen-api-key
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model-name: qwen3.5-plus
-      max-tokens: 8192
-      read-timeout: 600
-      temperature: 0.1
-    routing-chat-model:
-      api-key: your-qwen-api-key
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model-name: qwen-turbo
-      max-tokens: 150
-      temperature: 0.1
-    reasoning-streaming-chat-model:
-      api-key: your-deepseek-api-key
-      base-url: https://api.deepseek.com
-      model-name: deepseek-reasoner
-      max-tokens: 32768
-      temperature: 0.1
+### 3. 启动项目
 
-# 腾讯云 COS
-cos:
-  client:
-    host: https://your-bucket.cos.ap-guangzhou.myqcloud.com
-    secret-id: your-secret-id
-    secret-key: your-secret-key
-    region: ap-guangzhou
-    bucket: your-bucket-name
-```
-
-### 3. 启动 Redis
-
-确保 Redis 服务正在运行。
-
-### 4. 启动项目
+确保 MySQL 和 Redis 已启动，然后执行：
 
 ```bash
-# 开发环境
-./mvnw spring-boot:run
-
-# 生产环境
-./mvnw clean package -DskipTests
-java -jar target/ai-creator-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+./mvnw.cmd spring-boot:run
 ```
 
 服务启动后：
-- 服务地址：`http://localhost:8200/api`
-- API 文档：`http://localhost:8200/api/doc.html`
-- 部署的应用：`http://localhost:8200/api/static/{deployKey}/`
 
-## 项目结构
+- 接口地址：`http://localhost:8200/api`
+- 健康检查：`http://localhost:8200/api/actuator/health`
+- Knife4j：`http://localhost:8200/api/doc.html`
 
-```
-ai-creator/
-├── sql/                          # 数据库建表脚本
-├── docs/                         # 详细文档
-│   ├── architecture.md           # 架构设计
-│   ├── api-reference.md          # API 接口文档
-│   ├── configuration-guide.md    # 配置指南
-│   ├── database-design.md        # 数据库设计
-│   ├── deployment-guide.md       # 部署指南
-│   ├── development-guide.md      # 开发指南
-│   ├── monitoring-guide.md       # 监控指南
-│   └── ...
-├── src/main/java/org/cy/aicreator/
-│   ├── AiCreatorApplication.java        # 启动入口
-│   ├── ai/                               # AI 层
-│   │   ├── AiCodeGeneratorService.java   # AI 服务接口
-│   │   ├── AiCodeGeneratorServiceFactory.java
-│   │   ├── SmartRoutingService.java      # 智能路由接口
-│   │   ├── SmartRoutingServiceFactory.java
-│   │   └── guardrail/PromptSafetyInputGuardrail.java
-│   ├── controller/                       # REST 控制器
-│   │   ├── AppController.java           # 应用 CRUD + 生成 + 部署
-│   │   ├── UserController.java          # 用户注册/登录/管理
-│   │   ├── ChatHistoryController.java   # 对话历史
-│   │   └── AppStaticResourceController.java
-│   ├── core/                             # 核心门面层
-│   │   ├── AiCreatorFacade.java         # 统一编排入口
-│   │   ├── parser/                       # 代码解析器（策略模式）
-│   │   ├── saver/                        # 代码保存器（模板方法）
-│   │   └── handler/                      # 流式处理器
-│   ├── service/                          # 业务服务层
-│   ├── aop/                              # AOP 切面
-│   │   ├── AuthInterceptor.java         # 权限校验
-│   │   └── litmer/aspect/RateLimitAspect.java  # 限流
-│   ├── config/                           # 配置类
-│   ├── model/                            # 实体 / DTO
-│   ├── utils/                            # 工具类
-│   │   └── WebScreenshotUtils.java      # 网页截图
-│   └── monitor/                          # 监控指标采集
-├── src/main/resources/
-│   ├── application.yml                   # 主配置
-│   ├── application-local.yml             # 本地环境（gitignore）
-│   ├── application-prod.yml              # 生产环境（gitignore）
-│   └── prompt/                           # AI Prompt 模板
-├── front-end.md                          # 前端技术栈说明
-├── prometheus.yml                        # Prometheus 配置
-└── pom.xml                               # Maven 构建
+### 4. 构建与测试
+
+```bash
+./mvnw.cmd test
+./mvnw.cmd -DskipTests package
 ```
 
-## API 概览
+> 当前测试以 Spring 上下文加载为主，运行时需要有效的本地配置和可连接的 Redis。
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `POST` | `/api/user/register` | 用户注册 |
-| `POST` | `/api/user/login` | 用户登录 |
-| `GET` | `/api/user/logout` | 用户登出 |
-| `POST` | `/api/app/generate` | 创建应用并生成代码（SSE 流式） |
-| `POST` | `/api/app/chat` | 多轮对话优化（SSE 流式） |
-| `POST` | `/api/app/deploy/{appId}` | 部署应用 |
-| `GET` | `/api/app/download/{appId}` | 下载应用 ZIP |
-| `GET` | `/api/app/page` | 分页查询应用列表 |
-| `DELETE` | `/api/app/delete/{appId}` | 删除应用 |
-| `GET` | `/api/chat-history/page` | 分页查询对话历史 |
-| `GET` | `/api/static/{deployKey}/` | 访问已部署的应用 |
+## 主要接口模块
 
-> 完整接口文档请查看 `http://localhost:8200/api/doc.html` 或 [docs/api-reference.md](docs/api-reference.md)
+| 路径 | 功能 |
+| --- | --- |
+| `/user` | 用户注册、登录、退出和后台管理 |
+| `/app` | 应用创建、查询、修改、删除和精选列表 |
+| `/app/chat/generate/code` | SSE 流式生成或修改代码 |
+| `/app/deploy` | 部署应用并生成访问地址 |
+| `/app/download/{appId}` | 下载应用 ZIP 源码 |
+| `/chatHistory/app/{appId}` | 分页查看应用对话记录 |
+| `/static/{deployKey}/**` | 访问已部署的静态资源 |
 
-## 设计模式
-
-项目中应用了多种设计模式：
-
-| 模式 | 应用场景 |
-|------|----------|
-| **Facade（门面）** | `AiCreatorFacade` 统一编排代码生成、解析、保存流程 |
-| **Factory（工厂）** | `AiCodeGeneratorServiceFactory` 按 appId 创建独立 AI 服务实例 |
-| **Template Method（模板方法）** | `CodeFileSaverTemplate` 定义保存流程，子类实现具体逻辑 |
-| **Strategy（策略）** | `CodeParserExecutor` / `CodeFileSaverExecutor` 枚举驱动选择解析器 |
-| **Prototype（原型）** | 流式聊天模型 Bean 作用域为 prototype，避免并发冲突 |
+业务 JSON 接口统一使用 `BaseResponse` 返回，AI 生成接口使用 SSE 协议返回流式内容。
 
 
 
-## License
+## 项目说明
 
-个人学习项目
+本项目是应届生个人学习项目，适合用于理解 AI 代码生成平台的基础实现。完整运行需要自行准备数据库、Redis、模型 API 等外部服务，请勿在公开仓库中提交真实凭据。
