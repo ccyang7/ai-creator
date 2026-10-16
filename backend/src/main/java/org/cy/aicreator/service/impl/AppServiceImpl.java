@@ -21,8 +21,10 @@ import org.cy.aicreator.model.dto.app.AppAdminQueryDTO;
 import org.cy.aicreator.model.dto.app.AppQueryDTO;
 import org.cy.aicreator.model.entity.App;
 import org.cy.aicreator.model.entity.User;
+import org.cy.aicreator.model.enums.AppBuildStatusEnum;
 import org.cy.aicreator.model.enums.ChatHistoryMessageTypeEnum;
 import org.cy.aicreator.model.enums.GenerTypeEnum;
+import org.cy.aicreator.model.vo.AppBuildStatusVO;
 import org.cy.aicreator.model.vo.AppVO;
 import org.cy.aicreator.model.vo.UserVO;
 import org.cy.aicreator.monitor.MonitorContext;
@@ -31,6 +33,7 @@ import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.ChatHistoryService;
 import org.cy.aicreator.service.ScreenshotService;
 import org.cy.aicreator.service.UserService;
+import org.cy.aicreator.service.VueProjectBuildService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,6 +73,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private SmartRoutingServiceFactory smartRoutingServiceFactory;
+
+    @Resource
+    private VueProjectBuildService vueProjectBuildService;
 
     @Value("${code.deploy-host:http://localhost}")
     private String deployHost;
@@ -376,6 +382,16 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String codeGenType = app.getCodeGenType();
         String sourceDirName = codeGenType + "_" + appId;
         String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+        // Vue 工程是可编译的源码工程，源码本身在浏览器里跑不起来（.vue 是未编译的单文件组件），
+        // 直接部署只会得到一个白屏页面，因此必须等构建产出 dist 后再部署构建产物
+        if (GenerTypeEnum.VUE_PROJECT.getValue().equals(codeGenType)) {
+            AppBuildStatusVO buildStatus = vueProjectBuildService.getStatus(appId);
+            if (!AppBuildStatusEnum.SUCCESS.getValue().equals(buildStatus.getStatus())) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                        "应用尚未构建完成，无法部署：" + buildStatus.getMessage());
+            }
+            sourceDirPath = sourceDirPath + File.separator + "dist";
+        }
         File sourceDir = new File(sourceDirPath);
 
         // 6. 检查源目录是否存在

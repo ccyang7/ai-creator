@@ -49,22 +49,36 @@ public class JsonMessageStreamHandler {
                 .doOnComplete(() -> {
                     // 流式响应完成后，添加 AI 消息到对话历史
                     String aiResponse = chatHistoryStringBuilder.toString();
-                    chatHistoryService.addChatMessage(appId, loginUser.getId(), ChatHistoryMessageTypeEnum.AI.getValue(), aiResponse);
+                    if (StrUtil.isNotBlank(aiResponse)) {
+                        chatHistoryService.addChatMessage(appId, loginUser.getId(), aiResponse, ChatHistoryMessageTypeEnum.AI.getValue());
+                    }
                 })
                 .doOnError(error -> {
                     // 如果AI回复失败，也要记录错误消息
                     String errorMessage = "AI回复失败: " + error.getMessage();
-                    chatHistoryService.addChatMessage(appId, loginUser.getId(), ChatHistoryMessageTypeEnum.AI.getValue(), errorMessage);
+                    chatHistoryService.addChatMessage(appId, loginUser.getId(), errorMessage, ChatHistoryMessageTypeEnum.AI.getValue());
                 });
     }
 
     /**
      * 解析并收集 TokenStream 数据
+     * <p>
+     * 单条消息解析失败只跳过该条，不能让整条流进入 error——否则一个坏分片就会导致
+     * 前端一帧收不到、AI 回复也无法落库。
      */
     private String handleJsonMessageChunk(String chunk, StringBuilder chatHistoryStringBuilder, Set<String> seenToolIds) {
-        // 解析 JSON
-        StreamMessage streamMessage = JSONUtil.toBean(chunk, StreamMessage.class);
+        StreamMessage streamMessage;
+        try {
+            streamMessage = JSONUtil.toBean(chunk, StreamMessage.class);
+        } catch (Exception e) {
+            log.error("消息帧不是合法 JSON，已跳过：{}", StrUtil.brief(chunk, 200), e);
+            return "";
+        }
         StreamMessageTypeEnum typeEnum = StreamMessageTypeEnum.getEnumByValue(streamMessage.getType());
+        if (typeEnum == null) {
+            log.error("不支持的消息类型: {}", streamMessage.getType());
+            return "";
+        }
         switch (typeEnum) {
             case AI_RESPONSE -> {
                 AiResponseMessage aiMessage = JSONUtil.toBean(chunk, AiResponseMessage.class);
@@ -104,7 +118,6 @@ public class JsonMessageStreamHandler {
                 return output;
             }
             default -> {
-                log.error("不支持的消息类型: {}", typeEnum);
                 return "";
             }
         }

@@ -21,10 +21,12 @@ import org.cy.aicreator.litmer.enums.RateLimitType;
 import org.cy.aicreator.model.dto.app.*;
 import org.cy.aicreator.model.entity.App;
 import org.cy.aicreator.model.entity.User;
+import org.cy.aicreator.model.vo.AppBuildStatusVO;
 import org.cy.aicreator.model.vo.AppVO;
 import org.cy.aicreator.service.AppService;
 import org.cy.aicreator.service.ProjectDownloadService;
 import org.cy.aicreator.service.UserService;
+import org.cy.aicreator.service.VueProjectBuildService;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -57,6 +59,9 @@ public class AppController {
 
     @Resource
     private ProjectDownloadService projectDownloadService;
+
+    @Resource
+    private VueProjectBuildService vueProjectBuildService;
 
 
     /**
@@ -308,6 +313,25 @@ public class AppController {
             String jsonStr = JSONUtil.toJsonStr(wrapper);
             return ServerSentEvent.<String>builder().data(jsonStr).build();
         }).concatWith(Mono.just(ServerSentEvent.<String>builder().event("done").data("").build()));
+    }
+
+    /**
+     * 查询应用构建状态
+     * <p>
+     * VUE_PROJECT 生成的是 Vite 源码工程，需要服务端构建出 dist 才能预览和部署。
+     * 前端在生成结束后轮询本接口，据此展示"构建中"、挂载预览或提示失败原因。
+     * 与应用详情接口一致不限制调用者：返回的只是构建状态，不含任何敏感信息。
+     * </p>
+     *
+     * @param appId 应用ID
+     * @return 构建状态
+     */
+    @GetMapping("/build/status")
+    public BaseResponse<AppBuildStatusVO> getBuildStatus(@RequestParam Long appId) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAM_ERROR, "应用ID无效");
+        App app = appService.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        return ResultUtils.success(vueProjectBuildService.getStatus(appId));
     }
 
     /**
