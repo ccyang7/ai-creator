@@ -1,15 +1,39 @@
 # AI Creator
 
-> 基于 Spring Boot 与 LangChain4j 的 AI 前端代码生成平台：自然语言多轮对话生成代码、SSE 流式输出、在线预览、部署、封面截图与源码下载。
+> 基于 Spring Boot 与 LangChain4j 的 AI 前端代码生成平台：用自然语言描述需求，AI 流式生成可预览、可部署的前端页面源码。
+
+## 项目简介
+
+AI Creator 面向「描述需求 → 得到页面」这一场景：用户输入网站需求后，系统通过 AI 判断代码生成类型并创建应用，再以 SSE 流式返回代码生成过程，最终产出可在线预览的前端项目。
+
+用户可以在同一个应用上继续多轮对话修改代码，也可以部署生成结果、自动截取应用封面或下载 ZIP 源码。平台支持三种代码生成类型：
+
+| 生成类型 | 产物 |
+| --- | --- |
+| `html` | 单个 HTML 文件 |
+| `multi_file` | HTML / CSS / JS 多文件 |
+| `vue_project` | Vite + Vue 源码工程，由服务端构建后预览 |
+
+对话工作台还支持可视化编辑：在预览 iframe 中点选页面元素，元素的标签、选择器与文本会被拼入下一轮 prompt，实现「所见即所改」。管理后台提供用户、应用与对话记录的管理能力。
+
+## 技术栈
+
+| 端 | 技术 |
+| --- | --- |
+| 后端 | Java 21、Spring Boot 3.5、LangChain4j、MyBatis-Flex、MySQL 8、Redis |
+| 前端 | Vue 3.5、TypeScript 5.9、Vite 7、Pinia、Vue Router 4、Ant Design Vue 4 |
+| 关键实现 | Reactor Flux + SSE 流式输出、Redisson 限流、腾讯云 COS 封面存储、Selenium 截图 |
+
+## 仓库结构
 
 本仓库是 monorepo，前后端同仓管理：
 
-| 目录 | 内容 | 技术栈 |
-| --- | --- | --- |
-| [`backend/`](./backend) | 用户与应用管理、AI 生成链路、SSE 流式输出、预览/部署/截图/下载、限流与鉴权 | Java 21、Spring Boot 3.5、LangChain4j、MyBatis-Flex、MySQL 8、Redis |
-| [`frontend/`](./frontend) | 首页与创建入口、登录注册、应用对话工作台（SSE 渲染 + iframe 预览 + 可视化编辑）、管理后台 | Vue 3.5、TypeScript 5.9、Vite 7、Pinia、Vue Router 4、Ant Design Vue 4 |
+| 目录 | 内容 |
+| --- | --- |
+| [`backend/`](./backend) | 用户与应用管理、AI 生成链路、SSE 流式输出、预览/部署/截图/下载、限流与鉴权 |
+| [`frontend/`](./frontend) | 首页与创建入口、登录注册、应用对话工作台（SSE 渲染 + iframe 预览 + 可视化编辑）、管理后台 |
 
-两端的长期约定分别写在 [`backend/AGENTS.md`](./backend/AGENTS.md) 与 [`frontend/AGENTS.md`](./frontend/AGENTS.md)，改代码前先读对应那一份。
+两端的长期约定分别写在 [`backend/AGENTS.md`](./backend/AGENTS.md) 与 [`frontend/AGENTS.md`](./frontend/AGENTS.md)，改代码前先读对应那一份；跨端协议变化需同时更新两份。
 
 ## 快速开始
 
