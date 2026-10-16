@@ -36,6 +36,8 @@ build/
 application-local.yml
 application-prod.yml
 tmp
+# 测试类只用于本地验证，不纳入版本库（已跟踪的历史文件不受本规则影响）
+src/test/
 docs/
 !docs/
 docs/*

@@ -11,6 +11,8 @@ import org.cy.aicreator.constant.UserConstant;
 import org.cy.aicreator.exception.BusinessException;
 import org.cy.aicreator.exception.ErrorCode;
 import org.cy.aicreator.exception.ThrowUtils;
+import org.cy.aicreator.litmer.annotation.RateLimit;
+import org.cy.aicreator.litmer.enums.RateLimitType;
 import org.cy.aicreator.model.dto.user.UserAddDTO;
 import org.cy.aicreator.model.dto.user.UserLoginDTO;
 import org.cy.aicreator.model.dto.user.UserQueryDTO;
@@ -64,6 +66,8 @@ public class UserController {
      * @return 登录用户信息
      */
     @PostMapping("/login")
+    @RateLimit(key = "user_login", limitType = RateLimitType.IP, rate = 5, rateInterval = 60,
+            message = "登录尝试过于频繁，请 60 秒后重试")
     public BaseResponse<LoginUserVO> login(@RequestBody UserLoginDTO userLoginDTO, HttpServletRequest request) {
         ThrowUtils.throwIf(userLoginDTO == null, ErrorCode.PARAM_ERROR);
         LoginUserVO login = userService.login(userLoginDTO, request);
