@@ -40,7 +40,9 @@
                 v-else-if="app.codeGenType === 'multi_file'"
                 color="orange"
               >📁 MULTI_FILE</a-tag>
-              <a-tag v-else-if="app.codeGenType === 'vue'" color="blue">⚡ VUE</a-tag>
+              <a-tag v-else-if="app.codeGenType === 'vue_project'" color="blue">
+                ⚡ VUE_PROJECT
+              </a-tag>
               <a-tag v-else>{{ app.codeGenType || '-' }}</a-tag>
             </span>
           </div>
@@ -80,13 +82,11 @@ import dayjs from 'dayjs'
 interface AppDetailModalProps {
   app?: API.AppVO
   visible?: boolean
-  isOwner?: boolean
   showActions?: boolean
 }
 
 const props = withDefaults(defineProps<AppDetailModalProps>(), {
   visible: false,
-  isOwner: false,
   showActions: false,
 })
 

@@ -1,6 +1,8 @@
 import axios from 'axios'
 import { message } from 'ant-design-vue'
 
+let redirectingToLogin = false
+
 // 创建 Axios 实例
 const myAxios = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8200/api',
@@ -25,14 +27,21 @@ myAxios.interceptors.response.use(
   function (response) {
     const { data } = response
     // 未登录
-    if (data.code === 40100) {
+    if (data && typeof data === 'object' && data.code === 40100) {
+      const requestUrl = response.config.url || ''
       // 不是获取用户信息的请求，并且用户目前不是已经在用户登录页面，则跳转到登录页面
       if (
-        !response.request.responseURL.includes('user/get/login') &&
+        !requestUrl.includes('user/get/login') &&
         !window.location.pathname.includes('/user/login')
       ) {
+        if (redirectingToLogin) {
+          return response
+        }
+        redirectingToLogin = true
         message.warning('请先登录')
-        window.location.href = `/user/login?redirect=${window.location.href}`
+        const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+        const query = new URLSearchParams({ redirect })
+        window.location.assign(`/user/login?${query.toString()}`)
       }
     }
     return response
@@ -53,7 +62,7 @@ myAxios.interceptors.response.use(
  */
 export const downloadFile = async (
   url: string,
-  params?: Record<string, any>,
+  params?: Record<string, unknown>,
   filename?: string,
 ) => {
   try {

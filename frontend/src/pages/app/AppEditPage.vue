@@ -10,7 +10,6 @@
 
     <a-card class="app-edit-page__card">
       <a-form
-        ref="formRef"
         :model="formData"
         :rules="formRules"
         layout="vertical"
@@ -97,12 +96,12 @@ import dayjs from 'dayjs'
 import { LeftOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
 import { getAppById, updateApp, adminUpdateApp } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/loginUser'
+import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 
-const formRef = ref<any>(null)
 const submitting = ref(false)
 
 // 应用信息
@@ -148,11 +147,11 @@ const formatTime = (time?: string) => {
 // 获取类型颜色
 const getTypeColor = (type?: string) => {
   switch (type) {
-    case 'NoCode':
+    case 'html':
       return 'green'
-    case 'LowCode':
+    case 'multi_file':
       return 'orange'
-    case 'ProCode':
+    case 'vue_project':
       return 'blue'
     default:
       return 'default'
@@ -208,7 +207,6 @@ const handleSubmit = async () => {
   }
 
   try {
-    await formRef.value?.validate()
     submitting.value = true
 
     let res
@@ -234,8 +232,8 @@ const handleSubmit = async () => {
     } else {
       message.error(res.data.message || '保存失败')
     }
-  } catch (error: any) {
-    if (error?.response?.status === 403) {
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
       message.error('无权操作此应用')
     } else {
       console.error(error)
@@ -259,7 +257,7 @@ onMounted(() => {
 <style scoped>
 .app-edit-page {
   padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: var(--ac-page-background);
   min-height: calc(100vh - 64px - 48px);
 }
 
@@ -283,9 +281,10 @@ onMounted(() => {
 }
 
 .app-edit-page__card {
-  border-radius: 16px;
+  border: 1px solid rgba(203, 213, 225, 0.78);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
 }
 
 .app-edit-page__form {
@@ -300,8 +299,8 @@ onMounted(() => {
 }
 
 .app-edit-page__input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: var(--ac-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .app-edit-page__cover-preview {

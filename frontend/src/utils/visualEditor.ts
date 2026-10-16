@@ -22,6 +22,32 @@ export interface VisualEditorOptions {
   onElementHover?: (elementInfo: ElementInfo) => void
 }
 
+type VisualEditorMessage = {
+  type: string
+  editMode?: boolean
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const isElementInfo = (value: unknown): value is ElementInfo => {
+  if (!isRecord(value) || !isRecord(value.rect)) {
+    return false
+  }
+  return (
+    typeof value.tagName === 'string' &&
+    typeof value.id === 'string' &&
+    typeof value.className === 'string' &&
+    typeof value.textContent === 'string' &&
+    typeof value.selector === 'string' &&
+    typeof value.pagePath === 'string' &&
+    typeof value.rect.top === 'number' &&
+    typeof value.rect.left === 'number' &&
+    typeof value.rect.width === 'number' &&
+    typeof value.rect.height === 'number'
+  )
+}
+
 export class VisualEditor {
   private iframe: HTMLIFrameElement | null = null
   private isEditMode = false
@@ -36,6 +62,11 @@ export class VisualEditor {
    */
   init(iframe: HTMLIFrameElement) {
     this.iframe = iframe
+  }
+
+  destroy() {
+    this.isEditMode = false
+    this.iframe = null
   }
 
   /**
@@ -116,17 +147,34 @@ export class VisualEditor {
    * 处理来自 iframe 的消息
    */
   handleIframeMessage(event: MessageEvent) {
-    const { type, data } = event.data
+    const iframeOrigin = this.getIframeOrigin()
+    if (
+      !this.iframe?.contentWindow ||
+      event.source !== this.iframe.contentWindow ||
+      !iframeOrigin ||
+      event.origin !== iframeOrigin ||
+      !isRecord(event.data)
+    ) {
+      return
+    }
+
+    const type = event.data.type
+    const data = event.data.data
+    if (typeof type !== 'string' || !isRecord(data)) {
+      return
+    }
+
+    const elementInfo = data.elementInfo
+    if (!isElementInfo(elementInfo)) {
+      return
+    }
+
     switch (type) {
       case 'ELEMENT_SELECTED':
-        if (this.options.onElementSelected && data.elementInfo) {
-          this.options.onElementSelected(data.elementInfo)
-        }
+        this.options.onElementSelected?.(elementInfo)
         break
       case 'ELEMENT_HOVER':
-        if (this.options.onElementHover && data.elementInfo) {
-          this.options.onElementHover(data.elementInfo)
-        }
+        this.options.onElementHover?.(elementInfo)
         break
     }
   }
@@ -134,9 +182,21 @@ export class VisualEditor {
   /**
    * 向 iframe 发送消息
    */
-  private sendMessageToIframe(message: Record<string, any>) {
-    if (this.iframe?.contentWindow) {
-      this.iframe.contentWindow.postMessage(message, '*')
+  private sendMessageToIframe(message: VisualEditorMessage) {
+    const iframeOrigin = this.getIframeOrigin()
+    if (this.iframe?.contentWindow && iframeOrigin) {
+      this.iframe.contentWindow.postMessage(message, iframeOrigin)
+    }
+  }
+
+  private getIframeOrigin() {
+    if (!this.iframe?.src) {
+      return null
+    }
+    try {
+      return new URL(this.iframe.src, window.location.href).origin
+    } catch {
+      return null
     }
   }
 
@@ -144,12 +204,16 @@ export class VisualEditor {
    * 注入编辑脚本到 iframe
    */
   private injectEditScript() {
-    if (!this.iframe) return
+    const iframe = this.iframe
+    if (!iframe) return
 
     const waitForIframeLoad = () => {
+      if (this.iframe !== iframe) {
+        return
+      }
       try {
-        if (this.iframe!.contentWindow && this.iframe!.contentDocument) {
-          if (this.iframe!.contentDocument.getElementById('visual-edit-script')) {
+        if (iframe.contentWindow && iframe.contentDocument) {
+          if (iframe.contentDocument.getElementById('visual-edit-script')) {
             this.sendMessageToIframe({
               type: 'TOGGLE_EDIT_MODE',
               editMode: true,
@@ -158,10 +222,10 @@ export class VisualEditor {
           }
 
           const script = this.generateEditScript()
-          const scriptElement = this.iframe!.contentDocument.createElement('script')
+          const scriptElement = iframe.contentDocument.createElement('script')
           scriptElement.id = 'visual-edit-script'
           scriptElement.textContent = script
-          this.iframe!.contentDocument.head.appendChild(scriptElement)
+          iframe.contentDocument.head.appendChild(scriptElement)
         } else {
           setTimeout(waitForIframeLoad, 100)
         }
@@ -178,6 +242,7 @@ export class VisualEditor {
   private generateEditScript() {
     return `
       (function() {
+        const parentOrigin = ${JSON.stringify(window.location.origin)};
         let isEditMode = true;
         let currentHoverElement = null;
         let currentSelectedElement = null;
@@ -335,7 +400,7 @@ export class VisualEditor {
                window.parent.postMessage({
                  type: 'ELEMENT_SELECTED',
                  data: { elementInfo }
-               }, '*');
+               }, parentOrigin);
              } catch {
              }
            };
@@ -351,6 +416,12 @@ export class VisualEditor {
          }
 
         window.addEventListener('message', (event) => {
+           if (
+             event.source !== window.parent ||
+             event.origin !== parentOrigin ||
+             !event.data ||
+             typeof event.data !== 'object'
+           ) return;
            const { type, editMode } = event.data;
            switch (type) {
              case 'TOGGLE_EDIT_MODE':
@@ -381,7 +452,11 @@ export class VisualEditor {
            if (document.getElementById('edit-tip')) return;
            const tip = document.createElement('div');
            tip.id = 'edit-tip';
-           tip.innerHTML = '🎯 编辑模式已开启<br/>悬浮查看元素，点击选中元素';
+           tip.append(
+             document.createTextNode('🎯 编辑模式已开启'),
+             document.createElement('br'),
+             document.createTextNode('悬浮查看元素，点击选中元素')
+           );
            tip.style.cssText = \`
              position: fixed;
              top: 20px;

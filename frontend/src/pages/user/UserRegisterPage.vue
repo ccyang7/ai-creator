@@ -79,6 +79,7 @@ import type { StoreValue } from 'ant-design-vue/es/form/interface'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { register } from '@/api/userController'
+import { getSafeRedirect } from '@/utils/navigation'
 
 const router = useRouter()
 const route = useRoute()
@@ -94,7 +95,7 @@ const formState = reactive<API.UserRegisterDTO>({
 })
 
 // 如果是从鉴权拦截跳来的，会携带 redirect，这里透传到登录页，便于登录后回跳原页面
-const redirect = computed(() => (route.query.redirect as string) || '')
+const redirect = computed(() => getSafeRedirect(route.query.redirect, ''))
 
 const toLoginLink = computed(() => {
   if (!redirect.value) return '/user/login'
@@ -122,7 +123,7 @@ async function onFinish(values: API.UserRegisterDTO) {
       return
     }
     message.error(res.data.message ?? '注册失败，请重试')
-  } catch (e) {
+  } catch {
     message.error('网络异常，请稍后重试')
   } finally {
     loading.value = false
@@ -136,26 +137,60 @@ function onFinishFailed() {
 
 <style scoped>
 .register-page {
-  min-height: 60vh;
+  min-height: calc(100vh - 64px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  background-color: var(--ac-page-bg);
+  background-image:
+    radial-gradient(circle at 18% 14%, rgba(37, 99, 235, 0.16), transparent 30%),
+    radial-gradient(circle at 82% 20%, rgba(8, 145, 178, 0.13), transparent 28%);
+  position: relative;
+  overflow: hidden;
+}
+
+.register-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.045) 1px, transparent 1px);
+  background-size: 36px 36px;
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 82%);
+  mask-image: linear-gradient(to bottom, #000, transparent 82%);
+  pointer-events: none;
 }
 
 .register-card {
   width: 100%;
   max-width: 400px;
-  border-radius: 8px;
-  box-shadow:
-    0 1px 2px 0 rgba(0, 0, 0, 0.03),
-    0 1px 6px -1px rgba(0, 0, 0, 0.02),
-    0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(191, 219, 254, 0.82);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(30, 64, 175, 0.14);
+  backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.92);
+  animation: cardEntrance 0.6s ease-out;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes cardEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .register-card :deep(.ant-card-head) {
   border-bottom: 1px solid rgba(5, 5, 5, 0.06);
   font-weight: 600;
+  font-size: 20px;
 }
 
 .register-page__footer {
@@ -166,11 +201,15 @@ function onFinishFailed() {
 
 .register-page__footer a {
   margin-left: 4px;
-  color: #1677ff;
+  color: var(--ac-primary);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.3s ease;
 }
 
 .register-page__footer a:hover {
-  color: #4096ff;
+  color: var(--ac-primary-hover);
+  text-decoration: underline;
 }
 
 @media (max-width: 768px) {
@@ -178,6 +217,12 @@ function onFinishFailed() {
     padding: 12px;
     align-items: flex-start;
     padding-top: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .register-card {
+    animation: none;
   }
 }
 </style>

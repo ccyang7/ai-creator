@@ -1,7 +1,7 @@
 <template>
   <div class="global-header">
     <div class="global-header__left" @click="handleLogoClick">
-      <img class="global-header__logo" src="/src/assets/logo.svg" alt="logo" />
+      <img class="global-header__logo" :src="logoUrl" alt="AI Creator" />
       <div class="global-header__title">AI Creator</div>
     </div>
 
@@ -15,7 +15,11 @@
     </div>
 
     <div class="global-header__right">
-      <div v-if="loginUserStore.loginUser.id">
+      <div v-if="loginUserStore.loginUser.id" class="global-header__account">
+        <a-button class="global-header__create-btn" type="primary" @click="goCreate">
+          <PlusOutlined />
+          <span>新建应用</span>
+        </a-button>
         <a-dropdown>
           <a-space>
             <a-avatar :src="loginUserStore.loginUser.userAvatar" />
@@ -33,24 +37,26 @@
         </a-dropdown>
       </div>
       <div v-else>
-        <a-button type="primary" href="/user/login" @click="goLogin">登录</a-button>
+        <a-button type="primary" @click="goLogin">登录</a-button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, h, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
-import { LogoutOutlined } from '@ant-design/icons-vue'
+import { DashboardOutlined, LogoutOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { logout } from '@/api/userController.ts'
 import { message } from 'ant-design-vue'
+import logoUrl from '@/assets/logo.png'
 
 type HeaderMenuItem = {
   key: string
   label: string
   path: string
+  icon?: Component
   roles?: string[]
 }
 
@@ -59,21 +65,10 @@ type HeaderMenuItem = {
 const HEADER_MENU_ITEMS: HeaderMenuItem[] = [
   { key: 'home', label: '首页', path: '/' },
   {
-    key: 'admin-user-manage',
-    label: '用户管理',
+    key: 'admin',
+    label: '管理后台',
+    icon: DashboardOutlined,
     path: '/admin/userManage',
-    roles: ['admin'],
-  },
-  {
-    key: 'admin-app-manage',
-    label: '应用管理',
-    path: '/admin/appManage',
-    roles: ['admin'],
-  },
-  {
-    key: 'admin-chat-history-manage',
-    label: '对话管理',
-    path: '/admin/chatHistoryManage',
     roles: ['admin'],
   },
 ]
@@ -95,19 +90,21 @@ const menuItems = computed(() => {
   }).map((item) => ({
     key: item.path,
     label: item.label,
+    icon: item.icon ? h(item.icon) : undefined,
   }))
 })
 
 // 当前选中的菜单 key，与路由 path 对齐（仅在当前菜单列表中存在时选中）
 const selectedKeys = computed(() => {
   const keys = menuItems.value.map((item) => item.key)
+  if (route.path.startsWith('/admin')) {
+    return keys.includes('/admin/userManage') ? ['/admin/userManage'] : []
+  }
   return keys.includes(route.path) ? [route.path] : []
 })
 
-function onMenuClick(info: { key: string }) {
-  router.push(info.key).then(() => {
-    window.location.reload()
-  })
+async function onMenuClick(info: { key: string }) {
+  await router.push(info.key)
 }
 
 function handleLogoClick() {
@@ -118,17 +115,23 @@ function goLogin() {
   router.push('/user/login')
 }
 
+function goCreate() {
+  router.push('/')
+}
+
 async function doLogOut() {
-  const res = await logout()
-  if (res.data.code === 0) {
-    // 重置登录用户为未登录态
-    loginUserStore.setLoginUser({
-      userName: '未登录',
-    })
-    message.success('退出登录成功')
-    router.push('/user/login')
-  } else {
-    message.error('退出登录失败')
+  try {
+    const res = await logout()
+    if (res.data.code === 0) {
+      loginUserStore.setLoginUser({ userName: '未登录' })
+      message.success('退出登录成功')
+      await router.replace('/user/login')
+      return
+    }
+    message.error(res.data.message || '退出登录失败')
+  } catch (error) {
+    console.error('退出登录失败:', error)
+    message.error('退出登录失败，请稍后重试')
   }
 }
 </script>
@@ -184,6 +187,17 @@ async function doLogOut() {
   flex: none;
 }
 
+.global-header__account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.global-header__create-btn {
+  height: 34px;
+  border-radius: 6px;
+}
+
 :deep(.ant-menu) {
   background: transparent;
   border-bottom: none;
@@ -208,5 +222,16 @@ async function doLogOut() {
 
 :deep(.ant-menu-horizontal > .ant-menu-item:hover) {
   background: rgba(0, 0, 0, 0.04);
+}
+
+@media (max-width: 768px) {
+  .global-header__create-btn span {
+    display: none;
+  }
+
+  .global-header__create-btn {
+    width: 34px;
+    padding-inline: 0;
+  }
 }
 </style>

@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterView } from 'vue-router'
+import { useRoute } from 'vue-router'
 import GlobalHeader from '@/components/GlobalHeader.vue'
 import GlobalFooter from '@/components/GlobalFooter.vue'
+
+const route = useRoute()
+const hideFooter = computed(() => Boolean(route.meta.hideFooter))
+const fullBleed = computed(() => Boolean(route.meta.fullBleed))
 </script>
 
 <template>
@@ -10,11 +16,13 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
       <GlobalHeader />
     </a-layout-header>
 
-    <a-layout-content class="basic-layout__content">
+    <a-layout-content
+      :class="['basic-layout__content', { 'basic-layout__content--full-bleed': fullBleed }]"
+    >
       <RouterView />
     </a-layout-content>
 
-    <a-layout-footer class="basic-layout__footer">
+    <a-layout-footer v-if="!hideFooter" class="basic-layout__footer">
       <GlobalFooter />
     </a-layout-footer>
   </a-layout>
@@ -23,6 +31,7 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
 <style scoped>
 .basic-layout {
   min-height: 100vh;
+  background: var(--ac-page-background);
 }
 
 .basic-layout__header {
@@ -30,19 +39,26 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
   top: 0;
   z-index: 10;
   padding-inline: 24px;
-  background: #fff;
-  border-bottom: 1px solid rgba(5, 5, 5, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.72);
+  backdrop-filter: blur(14px);
 }
 
 .basic-layout__content {
   padding: 24px;
   flex: 1;
-  background: #f5f5f5;
+  background: var(--ac-page-background);
+}
+
+.basic-layout__content--full-bleed {
+  padding: 0;
 }
 
 .basic-layout__footer {
   padding: 16px 24px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.88);
+  border-top: 1px solid rgba(203, 213, 225, 0.64);
+  backdrop-filter: blur(10px);
 }
 
 @media (max-width: 768px) {
@@ -52,6 +68,10 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
 
   .basic-layout__content {
     padding: 12px;
+  }
+
+  .basic-layout__content--full-bleed {
+    padding: 0;
   }
 }
 </style>

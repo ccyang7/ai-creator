@@ -2,11 +2,10 @@
   <div class="user-manage-page">
     <div class="user-manage-page__header">
       <div class="user-manage-page__header-title">
-        <span class="user-manage-page__header-icon">👤</span>
-        <h1 class="user-manage-page__title">用户管理</h1>
+        <h2 class="user-manage-page__title">用户数据</h2>
       </div>
       <div class="user-manage-page__header-stats">
-        <a-statistic title="用户总数" :value="total" :value-style="{ color: '#667eea' }" />
+        <a-statistic title="用户总数" :value="total" :value-style="{ color: '#2563eb' }" />
       </div>
     </div>
 
@@ -125,6 +124,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { deleteUser, listUserVoByPage } from '@/api/userController.ts'
 import { message } from 'ant-design-vue'
+import type { TablePaginationConfig } from 'ant-design-vue'
 import dayjs from 'dayjs'
 
 const columns = [
@@ -147,11 +147,6 @@ const columns = [
     title: '头像',
     dataIndex: 'userAvatar',
     width: 120,
-  },
-  {
-    title: '简介',
-    dataIndex: 'userProfile',
-    ellipsis: true,
   },
   {
     title: '角色',
@@ -194,6 +189,9 @@ const fetchData = async () => {
     } else {
       message.error('获取数据失败，' + res.data.message)
     }
+  } catch (error) {
+    console.error('获取用户列表失败:', error)
+    message.error('获取用户列表失败，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -211,9 +209,9 @@ const pagination = computed(() => {
 })
 
 // 表格变化处理
-const doTableChange = (page: any) => {
-  searchParams.pageNum = page.current
-  searchParams.pageSize = page.pageSize
+const doTableChange = (page: TablePaginationConfig) => {
+  searchParams.pageNum = page.current ?? 1
+  searchParams.pageSize = page.pageSize ?? 10
   fetchData()
 }
 
@@ -237,12 +235,17 @@ const doDelete = async (id: string) => {
   if (!id) {
     return
   }
-  const res = await deleteUser({ id })
-  if (res.data.code === 0) {
-    message.success('删除成功')
-    fetchData()
-  } else {
-    message.error('删除失败，' + res.data.message)
+  try {
+    const res = await deleteUser({ id })
+    if (res.data.code === 0) {
+      message.success('删除成功')
+      fetchData()
+    } else {
+      message.error('删除失败，' + res.data.message)
+    }
+  } catch (error) {
+    console.error('删除用户失败:', error)
+    message.error('删除失败，请稍后重试')
   }
 }
 
@@ -254,21 +257,18 @@ onMounted(() => {
 
 <style scoped>
 .user-manage-page {
-  padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  min-height: calc(100vh - 64px - 48px);
+  min-height: 0;
 }
 
 .user-manage-page__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
 }
 
 .user-manage-page__header-title {
@@ -279,13 +279,13 @@ onMounted(() => {
 
 .user-manage-page__header-icon {
   font-size: 32px;
-  color: #667eea;
+  color: #2563eb;
 }
 
 .user-manage-page__title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
   margin: 0;
 }
 
@@ -295,14 +295,15 @@ onMounted(() => {
 }
 
 .user-manage-card {
-  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .user-manage-page__search-wrapper {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%);
-  border-radius: 12px;
+  background: #f8fafc;
+  border-radius: 6px;
   margin: -16px -16px 16px;
 }
 
@@ -319,8 +320,8 @@ onMounted(() => {
 }
 
 .user-manage-page__input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .user-manage-page__role-tag {
@@ -350,18 +351,18 @@ onMounted(() => {
 
 :deep(.ant-table) {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 6px;
 }
 
 :deep(.ant-table-thead > tr > th) {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  background: #f8fafc;
   color: #1a1a1a;
   font-weight: 600;
   padding: 14px 16px;
 }
 
 :deep(.ant-table-tbody > tr:hover > td) {
-  background: rgba(102, 126, 234, 0.04);
+  background: rgba(37, 99, 235, 0.04);
 }
 
 :deep(.ant-table-tbody > tr > td) {
@@ -375,7 +376,7 @@ onMounted(() => {
 }
 
 .user-manage-page__avatar {
-  border: 2px solid rgba(102, 126, 234, 0.2);
+  border: 2px solid rgba(37, 99, 235, 0.2);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 

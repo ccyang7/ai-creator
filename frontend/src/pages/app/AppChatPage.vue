@@ -20,13 +20,35 @@
           <CodeGenTypeTag v-if="appInfo.codeGenType" :type="appInfo.codeGenType" />
         </div>
       </div>
+      <div class="app-chat-page__header-center">
+        <a-radio-group
+          v-model:value="workspaceMode"
+          class="app-chat-page__view-switcher"
+          button-style="solid"
+          size="small"
+          @change="handleWorkspaceModeChange"
+        >
+          <a-radio-button value="chat">
+            <MessageOutlined />
+            <span>对话</span>
+          </a-radio-button>
+          <a-radio-button value="preview">
+            <EyeOutlined />
+            <span>预览</span>
+          </a-radio-button>
+          <a-radio-button value="split" class="app-chat-page__split-option">
+            <AppstoreOutlined />
+            <span>分屏</span>
+          </a-radio-button>
+        </a-radio-group>
+      </div>
       <div class="app-chat-page__header-right">
         <a-button class="app-chat-page__detail-btn" @click="showDetailModal = true">
           <InfoCircleOutlined />
           应用详情
         </a-button>
         <a-button
-          v-if="!appInfo.deployKey"
+          v-if="isOwner && !appInfo.deployKey"
           type="primary"
           class="app-chat-page__deploy-btn"
           :loading="deploying"
@@ -35,11 +57,12 @@
           <CloudUploadOutlined />
           部署
         </a-button>
-        <a-button v-else class="app-chat-page__deployed-btn" disabled>
+        <a-button v-else-if="isOwner && appInfo.deployKey" class="app-chat-page__deployed-btn" disabled>
           <CheckCircleOutlined />
           已部署
         </a-button>
         <a-button
+          v-if="isOwner"
           class="app-chat-page__download-btn"
           :loading="downloading"
           @click="handleDownloadCode"
@@ -47,7 +70,11 @@
           <DownloadOutlined />
           下载代码
         </a-button>
-        <a-button v-if="deployedUrl" class="app-chat-page__preview-btn" @click="openDeployedUrl">
+        <a-button
+          v-if="appInfo.deployKey"
+          class="app-chat-page__preview-btn"
+          @click="openDeployedUrl"
+        >
           <EyeOutlined />
           访问已部署网站
         </a-button>
@@ -55,7 +82,10 @@
     </div>
 
     <!-- 核心内容区域 -->
-    <div class="app-chat-page__main" ref="mainContainer">
+    <div
+      ref="mainContainer"
+      :class="['app-chat-page__main', `app-chat-page__main--${workspaceMode}`]"
+    >
       <!-- 左侧对话区域 -->
       <div class="app-chat-page__chat" :style="{ width: chatWidth + 'px' }">
         <!-- 消息区域 -->
@@ -84,8 +114,15 @@
               </div>
               <div class="app-chat-page__message-content">
                 <div
+                  v-if="message.isStreaming"
+                  class="app-chat-page__message-text app-chat-page__message-text--ai app-chat-page__message-text--streaming"
+                >
+                  {{ message.content }}
+                </div>
+                <div
+                  v-else
                   class="app-chat-page__message-text app-chat-page__message-text--ai"
-                  v-html="renderMarkdown(message.content)"
+                  v-html="message.renderedHtml"
                 ></div>
                 <!-- 代码文件列表 -->
                 <div
@@ -195,20 +232,10 @@
               placeholder="描述你的需求，让 AI 帮你完善应用..."
               :auto-size="{ minRows: 2, maxRows: 4 }"
               :disabled="isLoading || !appInfo.id"
-              @press-enter="handleSendMessage"
+              @press-enter="handleInputPressEnter"
             />
           </div>
           <div class="app-chat-page__input-actions">
-            <div class="app-chat-page__input-left">
-              <a-button class="app-chat-page__action-btn" disabled>
-                <PaperClipOutlined />
-                上传
-              </a-button>
-              <a-button class="app-chat-page__action-btn" disabled>
-                <EditOutlined />
-                优化
-              </a-button>
-            </div>
             <a-button
               v-if="isOwner"
               type="primary"
@@ -247,7 +274,7 @@
               {{ isEditMode ? '退出编辑' : '可视化编辑' }}
             </a-button>
             <a-button
-              v-if="generatedCode && showPreview"
+              v-if="showPreview"
               type="link"
               class="app-chat-page__refresh-btn"
               @click="refreshPreview"
@@ -259,7 +286,8 @@
         </div>
         <div class="app-chat-page__preview-content">
           <div v-if="!showPreview" class="app-chat-page__preview-empty">
-            <Empty description="等待代码生成完成后自动展示" />
+            <a-spin v-if="buildStatus === 'building'" />
+            <a-empty :description="previewPlaceholder" />
           </div>
           <iframe
             v-else
@@ -271,6 +299,25 @@
             @error="handleFrameError"
           ></iframe>
         </div>
+        <div v-if="workspaceMode === 'preview' && isOwner" class="app-chat-page__preview-composer">
+          <a-textarea
+            v-model:value="userInput"
+            class="app-chat-page__preview-input"
+            placeholder="继续描述你想修改的内容..."
+            :auto-size="{ minRows: 1, maxRows: 2 }"
+            :disabled="isLoading || !appInfo.id"
+            @press-enter="handleInputPressEnter"
+          />
+          <a-button
+            type="primary"
+            class="app-chat-page__preview-send"
+            :loading="isLoading"
+            @click="handleSendMessage"
+          >
+            <SendOutlined />
+            发送
+          </a-button>
+        </div>
       </div>
     </div>
 
@@ -278,8 +325,7 @@
     <AppDetailModal
       v-model:visible="showDetailModal"
       :app="appInfo"
-      :is-owner="isOwner"
-      :show-actions="isOwner"
+      :show-actions="canManageApp"
       @edit="handleEditApp"
       @delete="handleDeleteApp"
     />
@@ -287,11 +333,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import hljs from 'highlight.js/lib/core'
+import bash from 'highlight.js/lib/languages/bash'
+import css from 'highlight.js/lib/languages/css'
+import java from 'highlight.js/lib/languages/java'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import markdown from 'highlight.js/lib/languages/markdown'
+import typescript from 'highlight.js/lib/languages/typescript'
+import xml from 'highlight.js/lib/languages/xml'
 import 'highlight.js/styles/atom-one-dark.css'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import {
@@ -302,15 +356,21 @@ import {
   UserOutlined,
   FileOutlined,
   SendOutlined,
-  PaperClipOutlined,
   EditOutlined,
   ReloadOutlined,
   CheckCircleOutlined,
   InfoCircleOutlined,
-  DeleteOutlined,
   DownloadOutlined,
+  MessageOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons-vue'
-import { getAppById, deployApp, deleteApp } from '@/api/appController'
+import {
+  getAppById,
+  deployApp,
+  deleteApp,
+  adminDeleteApp,
+  getBuildStatus,
+} from '@/api/appController'
 import { downloadFile } from '@/request'
 import { listAppChatHistory } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
@@ -321,33 +381,210 @@ const route = useRoute()
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 
+const STREAM_FLUSH_INTERVAL = 50
+
+hljs.registerLanguage('bash', bash)
+hljs.registerLanguage('css', css)
+hljs.registerLanguage('html', xml)
+hljs.registerLanguage('java', java)
+hljs.registerLanguage('javascript', javascript)
+hljs.registerLanguage('json', json)
+hljs.registerLanguage('markdown', markdown)
+hljs.registerLanguage('typescript', typescript)
+hljs.registerLanguage('vue', xml)
+hljs.registerLanguage('xml', xml)
+
+const escapeHtml = (content: string) =>
+  content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+
 const md = new MarkdownIt()
+md.set({
+  html: false,
+  breaks: true,
+  linkify: true,
+  highlight: (content: string, language: string) => {
+    if (language && hljs.getLanguage(language)) {
+      try {
+        return hljs.highlight(content, { language }).value
+      } catch (error) {
+        console.error('代码高亮失败:', error)
+      }
+    }
+    return escapeHtml(content)
+  },
+})
 
 // 应用信息
 const appInfo = ref<API.AppVO>({})
 const appId = ref<string>('')
 
 // 消息列表
+interface ChatFile {
+  name: string
+  path: string
+  content?: string
+}
+
 interface ChatMessage {
   role: 'user' | 'ai'
   content: string
-  files?: Array<{
-    name: string
-    path: string
-    content?: string
-  }>
+  renderedHtml?: string
+  isStreaming?: boolean
+  files?: ChatFile[]
 }
 
 const messages = ref<ChatMessage[]>([])
 const userInput = ref('')
 const isLoading = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
+let activeEventSource: EventSource | null = null
+let disposeActiveStream: (() => void) | null = null
+let flushActiveStream: (() => void) | null = null
+let initialMessageTimer: number | undefined
 
 // 代码生成相关
-const generatedCode = ref('')
 const showPreview = ref(false)
 const previewUrl = ref('')
 const previewFrame = ref<HTMLIFrameElement | null>(null)
+
+// Vue 工程构建状态：VUE_PROJECT 生成的是 Vite 源码工程，服务端要跑一次 npm build
+// 产出 dist 之后预览才有意义，因此生成结束后需要轮询构建状态
+const buildStatus = ref<'none' | 'building' | 'success' | 'failed'>('none')
+const buildMessage = ref('')
+let buildPollingTimer: number | undefined
+const BUILD_POLL_INTERVAL = 2000
+const BUILD_POLL_TIMEOUT = 10 * 60 * 1000
+// 构建触发与 done 事件之间有时间差，宽限期内出现 none 不视为"不会构建"
+const BUILD_NONE_GRACE = 15000
+
+const isVueProject = computed(() => appInfo.value.codeGenType === 'vue_project')
+
+/**
+ * 预览区占位文案：Vue 工程构建期间要给出明确进度，否则用户只看到一片空白
+ */
+const previewPlaceholder = computed(() => {
+  if (buildStatus.value === 'building') {
+    return buildMessage.value || '正在构建前端工程，请稍候...'
+  }
+  if (buildStatus.value === 'failed') {
+    return `构建失败：${buildMessage.value || '请查看服务端日志后重新生成'}`
+  }
+  return '等待代码生成完成后自动展示'
+})
+
+const stopBuildPolling = () => {
+  if (buildPollingTimer !== undefined) {
+    window.clearTimeout(buildPollingTimer)
+    buildPollingTimer = undefined
+  }
+}
+
+/**
+ * 拉取预览地址并挂载 iframe
+ */
+const openPreview = () => {
+  showPreview.value = true
+  const previewBaseUrl =
+    import.meta.env.VITE_PREVIEW_BASE_URL || 'http://localhost:8200/api/static'
+  previewUrl.value = `${previewBaseUrl}/${appInfo.value.codeGenType}_${appInfo.value.id}/`
+  if (!hasUserSelectedWorkspaceMode.value) {
+    workspaceMode.value = 'preview'
+  }
+  refreshPreview()
+}
+
+/**
+ * 查询一次构建状态
+ *
+ * @returns 后端返回的状态值，查询失败时返回 null
+ */
+const fetchBuildStatus = async () => {
+  try {
+    const res = await getBuildStatus({ appId: String(appId.value) })
+    const body = res.data
+    buildMessage.value = body?.data?.message ?? ''
+    return body?.data?.status ?? 'none'
+  } catch (error) {
+    console.error('查询构建状态失败:', error)
+    buildMessage.value = '构建状态查询失败'
+    return null
+  }
+}
+
+/**
+ * 轮询构建状态，直到成功、失败或超时
+ *
+ * @param silentSuccess 构建成功时是否使用更安静的提示（页面加载时无需重复"代码生成完成"）
+ */
+const pollBuildStatus = async (silentSuccess = false) => {
+  const targetAppId = appId.value
+  const startedAt = Date.now()
+  buildStatus.value = 'building'
+  if (!buildMessage.value) {
+    buildMessage.value = '正在构建前端工程...'
+  }
+
+  const poll = async () => {
+    // 切换了应用或页面已卸载时停止轮询
+    if (appId.value !== targetAppId) return
+    const status = await fetchBuildStatus()
+    if (status === 'success') {
+      buildStatus.value = 'success'
+      stopBuildPolling()
+      openPreview()
+      message.success(silentSuccess ? '预览已就绪' : '代码生成完成，工程构建成功，已自动展示预览')
+      return
+    }
+    if (status === 'failed') {
+      buildStatus.value = 'failed'
+      stopBuildPolling()
+      message.error(`工程构建失败：${buildMessage.value || '请查看服务端日志'}`)
+      return
+    }
+    if (status === 'none' && Date.now() - startedAt > BUILD_NONE_GRACE) {
+      // 构建触发与 done 事件之间有极小的时间差，超过宽限期仍是 none 说明这次不会构建
+      buildStatus.value = 'none'
+      buildMessage.value = ''
+      stopBuildPolling()
+      return
+    }
+    if (Date.now() - startedAt > BUILD_POLL_TIMEOUT) {
+      buildStatus.value = 'failed'
+      buildMessage.value = '构建超时，请稍后刷新重试'
+      message.error('工程构建超时')
+      stopBuildPolling()
+      return
+    }
+    buildStatus.value = 'building'
+    buildPollingTimer = window.setTimeout(poll, BUILD_POLL_INTERVAL)
+  }
+
+  await poll()
+}
+
+/**
+ * 页面加载时确认构建状态：已构建好就直接预览，构建中则继续轮询，
+ * 从未构建或构建失败不自动挂 iframe
+ */
+const restorePreviewIfBuilt = async () => {
+  if (!hasUserSelectedWorkspaceMode.value) {
+    workspaceMode.value = 'preview'
+  }
+  const status = await fetchBuildStatus()
+  if (status === 'success') {
+    buildStatus.value = 'success'
+    openPreview()
+  } else if (status === 'building') {
+    await pollBuildStatus(true)
+  } else {
+    buildStatus.value = status === 'failed' ? 'failed' : 'none'
+  }
+}
 
 // 部署相关
 const deployedUrl = ref('')
@@ -355,6 +592,29 @@ const deploying = ref(false)
 
 // 下载相关
 const downloading = ref(false)
+
+type WorkspaceMode = 'chat' | 'preview' | 'split'
+
+const WORKSPACE_MODE_STORAGE_KEY = `ai-creator:workspace-mode:${String(route.params.id || 'unknown')}`
+const getStoredWorkspaceMode = (): WorkspaceMode | null => {
+  try {
+    const storedMode = window.localStorage.getItem(WORKSPACE_MODE_STORAGE_KEY)
+    if (storedMode === 'chat' || storedMode === 'preview' || storedMode === 'split') {
+      return storedMode
+    }
+  } catch {
+    // localStorage 不可用时使用默认模式
+  }
+  return null
+}
+
+const storedWorkspaceMode = getStoredWorkspaceMode()
+const workspaceMode = ref<WorkspaceMode>(
+  window.innerWidth <= 900 && storedWorkspaceMode === 'split'
+    ? 'preview'
+    : storedWorkspaceMode || 'chat',
+)
+const hasUserSelectedWorkspaceMode = ref(storedWorkspaceMode !== null)
 
 // 可视化编辑相关
 const isEditMode = ref(false)
@@ -367,7 +627,9 @@ const visualEditor = new VisualEditor({
 })
 
 // ==================== 权限控制 ====================
-const isOwner = ref(false) // 是否是应用的所有者（本人或管理员）
+const isOwner = ref(false)
+const isAdmin = computed(() => loginUserStore.loginUser.userRole === 'admin')
+const canManageApp = computed(() => isOwner.value || isAdmin.value)
 
 // ==================== 对话历史相关 ====================
 const hasMoreHistory = ref(true) // 是否还有更多历史消息可加载
@@ -390,12 +652,71 @@ const mainContainer = ref<HTMLElement | null>(null) // 主容器引用
  * 滚动到消息列表底部
  * 用于新消息到达时自动滚动
  */
-const scrollToBottom = () => {
+let scrollAnimationFrame: number | null = null
+let scrollScheduled = false
+
+const scrollToBottom = (force = true) => {
+  const container = messagesContainer.value
+  if (!container || document.hidden) {
+    return
+  }
+
+  const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+  if (!force && distanceToBottom > 120) {
+    return
+  }
+  if (scrollScheduled) {
+    return
+  }
+
+  scrollScheduled = true
   nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-    }
+    scrollAnimationFrame = window.requestAnimationFrame(() => {
+      scrollScheduled = false
+      scrollAnimationFrame = null
+      if (messagesContainer.value && !document.hidden) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
+    })
   })
+}
+
+const handleWorkspaceModeChange = () => {
+  hasUserSelectedWorkspaceMode.value = true
+  try {
+    window.localStorage.setItem(WORKSPACE_MODE_STORAGE_KEY, workspaceMode.value)
+  } catch {
+    // localStorage 不可用时不影响当前页面切换
+  }
+
+  if (workspaceMode.value !== 'split' && isEditMode.value) {
+    visualEditor.toggleEditMode()
+    isEditMode.value = false
+    clearSelectedElement()
+  }
+
+  if (workspaceMode.value === 'split') {
+    nextTick(syncPanelWidths)
+  }
+}
+
+const syncPanelWidths = () => {
+  const containerWidth = mainContainer.value?.offsetWidth || 0
+  if (containerWidth <= 0) return
+
+  const minChatWidth = 360
+  const maxChatWidth = Math.max(minChatWidth, containerWidth * 0.6)
+  chatWidth.value = Math.min(Math.max(chatWidth.value, minChatWidth), maxChatWidth)
+  previewWidth.value = Math.max(0, containerWidth - chatWidth.value - 12)
+}
+
+const handleViewportResize = () => {
+  if (window.innerWidth <= 900 && workspaceMode.value === 'split') {
+    workspaceMode.value = 'preview'
+    handleWorkspaceModeChange()
+    return
+  }
+  syncPanelWidths()
 }
 
 // ==================== 可视化编辑相关 ====================
@@ -412,6 +733,13 @@ const toggleEditMode = () => {
   isEditMode.value = newEditMode
 
   if (newEditMode) {
+    workspaceMode.value = 'split'
+    hasUserSelectedWorkspaceMode.value = true
+    try {
+      window.localStorage.setItem(WORKSPACE_MODE_STORAGE_KEY, 'split')
+    } catch {
+      // localStorage 不可用时不影响编辑模式
+    }
     message.info('已进入编辑模式，鼠标悬浮在元素上可查看，点击选中元素')
   } else {
     clearSelectedElement()
@@ -432,32 +760,9 @@ const clearSelectedElement = () => {
  * @param content Markdown 格式的内容
  * @returns 渲染后的 HTML
  *
- * 功能说明：
- * 1. 支持代码高亮（使用 highlight.js）
- * 2. 自动转义 HTML 特殊字符
- * 3. 支持多种编程语言的语法高亮
+ * 流式阶段不调用此方法，避免对不断增长的内容重复解析和高亮。
  */
 const renderMarkdown = (content: string) => {
-  // 配置 markdown-it 支持代码高亮
-  md.set({
-    highlight: (str: string, lang: string) => {
-      if (lang && hljs.getLanguage(lang)) {
-        try {
-          return hljs.highlight(str, { language: lang }).value
-        } catch (e) {
-          console.error('代码高亮失败:', e)
-        }
-      }
-      // 如果没有指定语言或高亮失败，直接转义 HTML
-      const escaped = str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
-      return escaped
-    },
-  })
   return md.render(content)
 }
 
@@ -475,33 +780,36 @@ const loadAppInfo = async () => {
   if (!appId.value) {
     message.error('应用 ID 无效')
     router.push('/')
-    return
+    return false
   }
 
   try {
     const res = await getAppById({ id: appId.value })
     if (res.data.code === 0 && res.data.data) {
       appInfo.value = res.data.data
-      console.log('应用信息加载成功:', appInfo.value)
-      console.log('codeGenType:', appInfo.value.codeGenType)
 
       // 检查是否是当前用户的应用
-      if (loginUserStore.loginUser.id && appInfo.value.userId === loginUserStore.loginUser.id) {
-        isOwner.value = true
-      } else if (loginUserStore.loginUser.userRole === 'admin') {
-        isOwner.value = true
-      } else {
-        isOwner.value = false
-      }
+      isOwner.value = Boolean(
+        loginUserStore.loginUser.id && appInfo.value.userId === loginUserStore.loginUser.id,
+      )
 
-      console.log('isOwner:', isOwner.value)
+      const deployKey = appInfo.value.deployKey
+      if (deployKey) {
+        const deployBaseUrl = import.meta.env.VITE_DEPLOY_BASE_URL || 'http://localhost:88'
+        deployedUrl.value = `${deployBaseUrl.replace(/\/$/, '')}/${encodeURIComponent(deployKey)}`
+      } else {
+        deployedUrl.value = ''
+      }
+      return true
     } else {
       message.error('应用不存在')
       router.push('/')
+      return false
     }
   } catch (error) {
     console.error(error)
     message.error('加载应用信息失败')
+    return false
   }
 }
 
@@ -541,10 +849,15 @@ const loadChatHistory = async (loadMore: boolean = false) => {
       if (records.length > 0) {
         // 转换历史消息格式
         const historyMessages: ChatMessage[] = records
-          .map((record) => ({
-            role: record.messageType === 'user' ? 'user' : 'ai',
-            content: record.message || '',
-          }))
+          .map((record) => {
+            const role: ChatMessage['role'] = record.messageType === 'user' ? 'user' : 'ai'
+            const content = record.message || ''
+            return {
+              role,
+              content,
+              renderedHtml: role === 'ai' ? renderMarkdown(content) : undefined,
+            }
+          })
           .reverse() // 因为后端返回的是倒序，需要反转
 
         if (loadMore) {
@@ -556,7 +869,7 @@ const loadChatHistory = async (loadMore: boolean = false) => {
         }
 
         // 更新游标（最早的一条消息的创建时间）
-        lastCreateTime.value = records[records.length - 1].createTime || ''
+        lastCreateTime.value = records[records.length - 1]?.createTime || ''
 
         // 判断是否还有更多历史
         hasMoreHistory.value = records.length === 10
@@ -568,8 +881,6 @@ const loadChatHistory = async (loadMore: boolean = false) => {
       } else {
         hasMoreHistory.value = false
       }
-
-      console.log('对话历史加载成功，消息数量:', records.length)
     }
   } catch (error) {
     console.error('加载对话历史失败:', error)
@@ -580,6 +891,46 @@ const loadChatHistory = async (loadMore: boolean = false) => {
 }
 
 // ==================== 发送消息 ====================
+
+/**
+ * 读取工具调用的参数对象
+ */
+const extractSseContent = (data: string) => {
+  try {
+    const parsed = JSON.parse(data) as Record<string, unknown>
+    const readText = (key: string) => (typeof parsed[key] === 'string' ? parsed[key] : '')
+    const content = readText('content') || readText('d')
+    if (content) {
+      return content
+    }
+
+    const explanation = readText('explanation') || readText('description') || readText('cn')
+    const code =
+      readText('code') || readText('html') || readText('css') || readText('javascript')
+    return explanation && code ? `${explanation}\n\n${code}` : explanation || code
+  } catch {
+    return data
+  }
+}
+
+const closeActiveStream = () => {
+  disposeActiveStream?.()
+  disposeActiveStream = null
+  flushActiveStream = null
+  activeEventSource?.close()
+  activeEventSource = null
+}
+
+const handleVisibilityChange = () => {
+  if (!document.hidden) {
+    flushActiveStream?.()
+  }
+}
+
+const handleWindowMessage = (event: MessageEvent) => {
+  visualEditor.handleIframeMessage(event)
+}
+
 /**
  * 发送用户消息并获取 AI 响应
  *
@@ -590,6 +941,8 @@ const loadChatHistory = async (loadMore: boolean = false) => {
  * 4. 生成完成后自动显示预览
  */
 const handleSendMessage = async () => {
+  if (isLoading.value) return
+
   if (!userInput.value.trim()) {
     message.warning('请输入消息内容')
     return
@@ -634,11 +987,19 @@ const handleSendMessage = async () => {
   scrollToBottom()
 
   try {
+    closeActiveStream()
+    // 重新生成时丢弃上一轮的构建轮询，避免旧状态覆盖本轮
+    stopBuildPolling()
+    buildStatus.value = 'none'
+    buildMessage.value = ''
+
     // 添加 AI 消息占位
     const aiMessageIndex = messages.value.length
     messages.value.push({
       role: 'ai',
       content: '',
+      renderedHtml: '',
+      isStreaming: true,
       files: [],
     })
 
@@ -652,29 +1013,88 @@ const handleSendMessage = async () => {
         withCredentials: true,
       },
     )
+    activeEventSource = eventSource
 
     let aiContent = ''
-    const hasFiles = false
+    let pendingChunks: string[] = []
+    let flushTimer: number | undefined
     let isDone = false
+
+    const flushStream = () => {
+      if (flushTimer !== undefined) {
+        window.clearTimeout(flushTimer)
+        flushTimer = undefined
+      }
+      if (pendingChunks.length === 0) {
+        return
+      }
+
+      aiContent += pendingChunks.join('')
+      pendingChunks = []
+      const aiMessage = messages.value[aiMessageIndex]
+      if (aiMessage) {
+        aiMessage.content = aiContent
+        scrollToBottom(false)
+      }
+    }
+
+    const scheduleFlush = () => {
+      if (document.hidden || flushTimer !== undefined) {
+        return
+      }
+      flushTimer = window.setTimeout(flushStream, STREAM_FLUSH_INTERVAL)
+    }
+
+    const disposeStream = () => {
+      if (flushTimer !== undefined) {
+        window.clearTimeout(flushTimer)
+        flushTimer = undefined
+      }
+      eventSource.close()
+      if (activeEventSource === eventSource) {
+        activeEventSource = null
+      }
+      if (flushActiveStream === flushStream) {
+        flushActiveStream = null
+      }
+      if (disposeActiveStream === disposeStream) {
+        disposeActiveStream = null
+      }
+    }
+
+    flushActiveStream = flushStream
+    disposeActiveStream = disposeStream
 
     // 处理自定义事件（包括 done 事件）
     eventSource.addEventListener('done', () => {
       isDone = true
-      eventSource.close()
+      flushStream()
+      const aiMessage = messages.value[aiMessageIndex]
+      if (aiMessage) {
+        aiMessage.isStreaming = false
+        aiMessage.renderedHtml = renderMarkdown(aiContent)
+      }
+      disposeStream()
       isLoading.value = false
-      console.log('SSE 流式传输完成，aiContent:', aiContent)
-      console.log('appInfo.codeGenType:', appInfo.value.codeGenType)
-      console.log('appId:', appIdParam)
 
       // 生成完成后显示预览
-      if (appInfo.value.codeGenType && aiContent.trim()) {
-        generatedCode.value = aiContent
+      if (isVueProject.value) {
+        // Vue 工程是可编译的源码工程，源码在浏览器里跑不起来，
+        // 必须等服务端构建出 dist 之后预览才有意义
+        if (!hasUserSelectedWorkspaceMode.value) {
+          workspaceMode.value = 'preview'
+        }
+        message.success('代码生成完成，正在构建前端工程...')
+        void pollBuildStatus()
+      } else if (appInfo.value.codeGenType && aiContent.trim()) {
         showPreview.value = true
         const previewBaseUrl =
           import.meta.env.VITE_PREVIEW_BASE_URL || 'http://localhost:8200/api/static'
         previewUrl.value = `${previewBaseUrl}/${appInfo.value.codeGenType}_${appIdParam}/`
-        console.log('预览 URL:', previewUrl.value)
         message.success('代码生成完成，已自动展示预览')
+        if (!hasUserSelectedWorkspaceMode.value) {
+          workspaceMode.value = 'preview'
+        }
         refreshPreview()
       } else if (!aiContent.trim()) {
         message.warning('AI 未生成任何内容')
@@ -685,48 +1105,17 @@ const handleSendMessage = async () => {
 
     // 处理普通消息
     eventSource.onmessage = (event) => {
-      try {
-        console.log('SSE 原始数据:', event.data)
-        const parsed = JSON.parse(event.data)
-        console.log('SSE 解析后的数据:', parsed)
-
-        // 后端返回的格式可能包含多个字段
-        // {"d": content} 或 {"content": content, "explanation": explanation}
-        const content = parsed.d || parsed.content || ''
-
-        // 如果有中文说明字段（假设字段名为 explanation 或 description）
-        const explanation = parsed.explanation || parsed.description || parsed.cn || ''
-
-        console.log('提取的内容:', content)
-        console.log('提取的说明:', explanation)
-
-        if (content || explanation) {
-          // 拼接内容和中文说明
-          let fullContent = aiContent
-          if (explanation && !fullContent.includes(explanation)) {
-            // 如果说明存在且未包含在内容中，添加到前面
-            fullContent = `${explanation}\n\n${content}`
-          } else {
-            fullContent += content
-          }
-
-          aiContent = fullContent
-          messages.value[aiMessageIndex]!.content = aiContent
-          scrollToBottom()
-        }
-      } catch (e) {
-        console.error('JSON 解析失败:', e)
-        // 如果不是 JSON，直接作为内容
-        aiContent += event.data
-        messages.value[aiMessageIndex]!.content = aiContent
-        scrollToBottom()
+      const contentToAdd = extractSseContent(event.data)
+      if (contentToAdd) {
+        pendingChunks.push(contentToAdd)
+        scheduleFlush()
       }
     }
 
     eventSource.onerror = (error) => {
       console.error('SSE 错误:', error)
       if (!isDone) {
-        eventSource.close()
+        disposeStream()
         isLoading.value = false
         message.error('对话连接异常中断')
         // 移除失败的消息
@@ -742,13 +1131,18 @@ const handleSendMessage = async () => {
   }
 }
 
+const handleInputPressEnter = (event: KeyboardEvent) => {
+  if (event.shiftKey || event.isComposing) return
+  event.preventDefault()
+  void handleSendMessage()
+}
+
 // ==================== 文件选择 ====================
 /**
  * 选择文件
  * @param file 选中的文件对象
  */
-const selectFile = (file: any) => {
-  console.log('选择文件:', file)
+const selectFile = (file: ChatFile) => {
   message.info(`查看文件：${file.name}`)
 }
 
@@ -796,7 +1190,7 @@ const handleDeploy = async () => {
  */
 const openDeployedUrl = () => {
   if (deployedUrl.value) {
-    window.open(deployedUrl.value, '_blank')
+    window.open(deployedUrl.value, '_blank', 'noopener,noreferrer')
   }
 }
 
@@ -852,7 +1246,6 @@ const refreshPreview = () => {
  * iframe 加载完成回调
  */
 const handleFrameLoad = () => {
-  console.log('iframe 加载完成')
   // 初始化可视化编辑器
   if (previewFrame.value) {
     visualEditor.init(previewFrame.value)
@@ -867,16 +1260,6 @@ const handleFrameError = () => {
   console.error('iframe 加载失败')
   message.error('预览加载失败，请检查后端服务是否正常运行')
 }
-
-// ==================== 监听预览状态 ====================
-/**
- * 监听预览状态变化
- */
-watch(showPreview, (newVal) => {
-  if (newVal) {
-    console.log('预览已启用，URL:', previewUrl.value)
-  }
-})
 
 // ==================== 导航操作 ====================
 /**
@@ -906,14 +1289,13 @@ const handleDeleteApp = async () => {
   }
 
   try {
-    const res = await deleteApp({ id: appInfo.value.id })
+    const res = isAdmin.value
+      ? await adminDeleteApp({ id: appInfo.value.id })
+      : await deleteApp({ id: appInfo.value.id })
     if (res.data.code === 0 && res.data.data) {
       message.success('删除成功')
       showDetailModal.value = false
-      // 删除成功后返回上一页
-      setTimeout(() => {
-        router.back()
-      }, 500)
+      router.back()
     } else {
       message.error(res.data.message || '删除失败')
     }
@@ -934,6 +1316,7 @@ const handleDeleteApp = async () => {
  * 3. 设置拖拽样式
  */
 const startResize = (e: MouseEvent) => {
+  if (workspaceMode.value !== 'split') return
   isResizing.value = true
   startX.value = e.clientX
   startChatWidth.value = chatWidth.value
@@ -950,21 +1333,21 @@ const startResize = (e: MouseEvent) => {
  *
  * 约束条件：
  * 1. 左侧对话区域：最小宽度 400px，最大宽度 60%
- * 2. 右侧预览区域：最小宽度 900px
+ * 2. 右侧预览区域：根据容器宽度保留合理的最小空间
  */
 const resize = (e: MouseEvent) => {
-  if (!isResizing.value || !mainContainer.value) return
+  if (!isResizing.value || workspaceMode.value !== 'split' || !mainContainer.value) return
 
   const diff = e.clientX - startX.value
   const newChatWidth = startChatWidth.value + diff
   const containerWidth = mainContainer.value.offsetWidth
   const maxChatWidth = containerWidth * 0.6
-  const minPreviewWidth = 900
-  const minChatWidth = 400
+  const minPreviewWidth = Math.min(600, containerWidth * 0.45)
+  const minChatWidth = 360
 
   // 限制最小和最大宽度
   if (newChatWidth >= minChatWidth && newChatWidth <= maxChatWidth) {
-    const newPreviewWidth = containerWidth - newChatWidth - 8 // 8px 是 gap
+    const newPreviewWidth = containerWidth - newChatWidth - 12
     if (newPreviewWidth >= minPreviewWidth) {
       chatWidth.value = newChatWidth
       previewWidth.value = newPreviewWidth
@@ -989,62 +1372,73 @@ const stopResize = () => {
 const sendInitialMessage = async () => {
   // 如果不是自己的应用，不自动发送
   if (!isOwner.value) {
-    console.log('不是自己的应用，不自动发送消息')
     return
   }
 
   // 如果有对话历史，不自动发送
   if (messages.value.length > 0) {
-    console.log('已有对话历史，不自动发送消息')
     return
   }
 
   // 如果有初始提示词，自动发送
   const initialPrompt = appInfo.value.initPrompt || (route.query.prompt as string)
   if (initialPrompt) {
-    console.log('自动发送初始消息:', initialPrompt)
     userInput.value = initialPrompt
     await handleSendMessage()
   }
 }
 
 onMounted(async () => {
-  await loadAppInfo()
+  const appLoaded = await loadAppInfo()
+  if (!appLoaded) return
 
   // 加载对话历史
   await loadChatHistory()
 
   // 初始化宽度
-  nextTick(() => {
-    if (mainContainer.value) {
-      const containerWidth = mainContainer.value.offsetWidth
-      chatWidth.value = 500
-      previewWidth.value = containerWidth - 500 - 8
-    }
-  })
+  nextTick(syncPanelWidths)
 
   // 如果有至少 2 条对话记录，展示网站预览
   if (messages.value.length >= 2 && appInfo.value.codeGenType) {
-    showPreview.value = true
-    const previewBaseUrl =
-      import.meta.env.VITE_PREVIEW_BASE_URL || 'http://localhost:8200/api/static'
-    previewUrl.value = `${previewBaseUrl}/${appInfo.value.codeGenType}_${appId.value}/`
-    console.log('已有对话历史，自动展示预览:', previewUrl.value)
+    if (isVueProject.value) {
+      // Vue 工程要先确认 dist 有没有构建好，否则预览只会是一片空白
+      void restorePreviewIfBuilt()
+    } else {
+      showPreview.value = true
+      const previewBaseUrl =
+        import.meta.env.VITE_PREVIEW_BASE_URL || 'http://localhost:8200/api/static'
+      previewUrl.value = `${previewBaseUrl}/${appInfo.value.codeGenType}_${appId.value}/`
+      if (!hasUserSelectedWorkspaceMode.value) {
+        workspaceMode.value = 'preview'
+      }
+    }
   }
 
-  // 监听 iframe 消息
-  window.addEventListener('message', (event) => {
-    visualEditor.handleIframeMessage(event)
-  })
+  // 监听 iframe 消息和页面可见性变化
+  window.addEventListener('message', handleWindowMessage)
+  window.addEventListener('resize', handleViewportResize)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   // 等待应用信息加载完后发送初始消息
-  setTimeout(() => {
+  initialMessageTimer = window.setTimeout(() => {
     sendInitialMessage()
   }, 500)
 })
 
 // 组件卸载时清理监听器
 onUnmounted(() => {
+  closeActiveStream()
+  stopBuildPolling()
+  visualEditor.destroy()
+  if (initialMessageTimer !== undefined) {
+    window.clearTimeout(initialMessageTimer)
+  }
+  if (scrollAnimationFrame !== null) {
+    window.cancelAnimationFrame(scrollAnimationFrame)
+  }
+  window.removeEventListener('message', handleWindowMessage)
+  window.removeEventListener('resize', handleViewportResize)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   // 清理拖拽相关事件监听
   document.removeEventListener('mousemove', resize)
   document.removeEventListener('mouseup', stopResize)
@@ -1056,25 +1450,56 @@ onUnmounted(() => {
   height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: var(--ac-page-background);
 }
 
 .app-chat-page__header {
   height: 64px;
-  background: #fff;
-  border-bottom: 1px solid #e8e8e8;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.72);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(12px);
   border-radius: 0 0 24px 24px;
+  gap: 16px;
 }
 
 .app-chat-page__header-left {
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
+}
+
+.app-chat-page__header-center {
+  display: flex;
+  justify-content: center;
+  margin-left: auto;
+}
+
+.app-chat-page__view-switcher {
+  white-space: nowrap;
+}
+
+.app-chat-page__view-switcher :deep(.ant-radio-button-wrapper) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding-inline: 14px;
+}
+
+.app-chat-page__view-switcher :deep(.ant-radio-button-wrapper:first-child) {
+  border-start-start-radius: 6px;
+  border-end-start-radius: 6px;
+}
+
+.app-chat-page__view-switcher :deep(.ant-radio-button-wrapper:last-child) {
+  border-start-end-radius: 6px;
+  border-end-end-radius: 6px;
 }
 
 .app-chat-page__back-btn {
@@ -1089,7 +1514,7 @@ onUnmounted(() => {
 }
 
 .app-chat-page__app-avatar {
-  border: 2px solid rgba(102, 126, 234, 0.2);
+  border: 2px solid rgba(37, 99, 235, 0.2);
 }
 
 .app-chat-page__app-name {
@@ -1107,25 +1532,26 @@ onUnmounted(() => {
 .app-chat-page__header-right {
   display: flex;
   gap: 12px;
+  flex: none;
 }
 
 .app-chat-page__detail-btn {
-  background: rgba(102, 126, 234, 0.08);
-  border: 2px solid rgba(102, 126, 234, 0.3);
-  color: #667eea;
+  background: rgba(37, 99, 235, 0.07);
+  border: 1px solid rgba(37, 99, 235, 0.28);
+  color: var(--ac-primary);
   border-radius: 20px;
   font-weight: 500;
   transition: all 0.3s;
 }
 
 .app-chat-page__detail-btn:hover {
-  background: rgba(102, 126, 234, 0.15);
-  border-color: #667eea;
+  background: rgba(37, 99, 235, 0.12);
+  border-color: var(--ac-primary);
   transform: translateY(-2px);
 }
 
 .app-chat-page__deploy-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--ac-primary) 0%, var(--ac-primary-hover) 100%);
   border: none;
   border-radius: 20px;
 }
@@ -1138,7 +1564,7 @@ onUnmounted(() => {
 }
 
 .app-chat-page__download-btn {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
   border: none;
   color: #fff;
   border-radius: 20px;
@@ -1146,7 +1572,7 @@ onUnmounted(() => {
 }
 
 .app-chat-page__download-btn:hover {
-  background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+  background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
   transform: translateY(-2px);
 }
 
@@ -1158,10 +1584,24 @@ onUnmounted(() => {
 .app-chat-page__main {
   flex: 1;
   display: flex;
-  gap: 12px;
+  gap: 0;
   padding: 20px;
   overflow: hidden;
   height: 100%;
+  min-height: 0;
+}
+
+.app-chat-page__main--chat .app-chat-page__chat,
+.app-chat-page__main--preview .app-chat-page__preview {
+  width: 100% !important;
+  flex: 1;
+}
+
+.app-chat-page__main--chat .app-chat-page__preview,
+.app-chat-page__main--chat .app-chat-page__resizer,
+.app-chat-page__main--preview .app-chat-page__chat,
+.app-chat-page__main--preview .app-chat-page__resizer {
+  display: none;
 }
 
 .app-chat-page__chat {
@@ -1170,9 +1610,10 @@ onUnmounted(() => {
   background: #fff;
   border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.12);
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  box-shadow: 0 12px 36px rgba(30, 64, 175, 0.09);
   flex-shrink: 0;
-  min-width: 400px;
+  min-width: 360px;
   height: 100%;
 }
 
@@ -1192,12 +1633,12 @@ onUnmounted(() => {
 }
 
 .app-chat-page__load-more .ant-btn-link {
-  color: #667eea;
+  color: var(--ac-primary);
   font-size: 14px;
 }
 
 .app-chat-page__load-more .ant-btn-link:hover {
-  color: #764ba2;
+  color: var(--ac-primary-hover);
 }
 
 .app-chat-page__message {
@@ -1239,12 +1680,12 @@ onUnmounted(() => {
 }
 
 .app-chat-page__message-avatar--ai {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--ac-primary) 0%, var(--ac-primary-hover) 100%);
   color: #fff;
 }
 
 .app-chat-page__message-avatar--user {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
   color: #fff;
 }
 
@@ -1278,7 +1719,7 @@ onUnmounted(() => {
 }
 
 .app-chat-page__message-text--user {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--ac-primary) 0%, var(--ac-primary-hover) 100%);
   color: #fff;
   border-bottom-right-radius: 6px;
   border-bottom-left-radius: 20px;
@@ -1289,6 +1730,12 @@ onUnmounted(() => {
   color: #333;
   border-bottom-left-radius: 6px;
   border-bottom-right-radius: 20px;
+}
+
+.app-chat-page__message-text--streaming {
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .app-chat-page__message-text--ai :deep(p) {
@@ -1394,7 +1841,7 @@ onUnmounted(() => {
 }
 
 .app-chat-page__message-file:hover {
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(37, 99, 235, 0.1);
   transform: translateY(-2px);
 }
 
@@ -1420,7 +1867,7 @@ onUnmounted(() => {
 .app-chat-page__loading-dots span {
   width: 8px;
   height: 8px;
-  background: #667eea;
+  background: var(--ac-primary);
   border-radius: 50%;
   animation: bounce 1.4s infinite ease-in-out both;
 }
@@ -1516,7 +1963,7 @@ onUnmounted(() => {
 }
 
 .app-chat-page__input {
-  border: 2px solid rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(37, 99, 235, 0.28);
   border-radius: 16px;
   padding: 14px;
   font-size: 14px;
@@ -1525,48 +1972,43 @@ onUnmounted(() => {
 }
 
 .app-chat-page__input:hover {
-  border-color: rgba(102, 126, 234, 0.4);
+  border-color: rgba(37, 99, 235, 0.46);
 }
 
 .app-chat-page__input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--ac-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .app-chat-page__input-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-}
-
-.app-chat-page__input-left {
-  display: flex;
-  gap: 8px;
 }
 
 .app-chat-page__action-btn {
   border-radius: 20px;
-  background: rgba(102, 126, 234, 0.05);
-  border: 1px solid rgba(102, 126, 234, 0.2);
-  color: #667eea;
+  background: rgba(37, 99, 235, 0.05);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: var(--ac-primary);
   font-size: 13px;
   transition: all 0.3s;
 }
 
 .app-chat-page__action-btn:hover:not(:disabled) {
-  background: rgba(102, 126, 234, 0.1);
-  border-color: #667eea;
+  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--ac-primary);
 }
 
 .app-chat-page__send-btn {
   height: 36px;
   padding: 0 24px;
   border-radius: 18px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--ac-primary) 0%, var(--ac-primary-hover) 100%);
   border: none;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.26);
 }
 
 /* 拖动手柄样式 */
@@ -1583,19 +2025,19 @@ onUnmounted(() => {
 }
 
 .app-chat-page__resizer:hover {
-  background: rgba(102, 126, 234, 0.15);
+  background: rgba(37, 99, 235, 0.12);
 }
 
 .app-chat-page__resizer-line {
   width: 4px;
   height: 40px;
-  background: rgba(102, 126, 234, 0.3);
+  background: rgba(37, 99, 235, 0.3);
   border-radius: 2px;
   transition: all 0.2s ease;
 }
 
 .app-chat-page__resizer:hover .app-chat-page__resizer-line {
-  background: rgba(102, 126, 234, 0.8);
+  background: rgba(37, 99, 235, 0.78);
   height: 60px;
 }
 
@@ -1606,17 +2048,17 @@ onUnmounted(() => {
   background: #fff;
   border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.12);
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  box-shadow: 0 12px 36px rgba(30, 64, 175, 0.09);
   flex-shrink: 0;
-  min-width: 900px;
-  padding-right: 60px;
+  min-width: 0;
   height: 100%;
 }
 
 .app-chat-page__preview-header {
   height: 48px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%);
-  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.035) 0%, rgba(8, 145, 178, 0.035) 100%);
+  border-bottom: 1px solid rgba(37, 99, 235, 0.1);
   display: flex;
   align-items: center;
   padding: 0 32px 0 16px;
@@ -1645,14 +2087,14 @@ onUnmounted(() => {
 .app-chat-page__preview-actions .ant-btn-link {
   padding: 4px 12px;
   font-size: 13px;
-  color: #667eea;
+  color: var(--ac-primary);
   border-radius: 12px;
   transition: all 0.3s;
 }
 
 .app-chat-page__preview-actions .ant-btn-link:hover {
-  background: rgba(102, 126, 234, 0.08);
-  color: #667eea;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--ac-primary);
 }
 
 .edit-mode-active {
@@ -1670,13 +2112,13 @@ onUnmounted(() => {
 .app-chat-page__refresh-btn {
   padding: 4px 12px;
   font-size: 13px;
-  color: #667eea;
+  color: var(--ac-primary);
   border-radius: 12px;
   transition: all 0.3s;
 }
 
 .app-chat-page__refresh-btn:hover {
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(37, 99, 235, 0.1);
 }
 
 .app-chat-page__preview-content {
@@ -1684,7 +2126,29 @@ onUnmounted(() => {
   position: relative;
   background: #fafafa;
   overflow: hidden;
-  padding: 0 16px 0 0;
+  padding: 0;
+}
+
+.app-chat-page__preview-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #fff;
+  border-top: 1px solid #e8e8e8;
+}
+
+.app-chat-page__preview-input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 6px;
+  resize: none;
+}
+
+.app-chat-page__preview-send {
+  height: 40px;
+  flex: none;
+  border-radius: 6px;
 }
 
 .app-chat-page__preview-empty {
@@ -1701,9 +2165,83 @@ onUnmounted(() => {
   background: #fff;
 }
 
-@media (max-width: 1200px) {
-  .app-chat-page__chat {
-    width: 400px;
+@media (max-width: 900px) {
+  .app-chat-page {
+    height: calc(100vh - 64px);
+    min-height: 620px;
+  }
+
+  .app-chat-page__header {
+    height: auto;
+    min-height: 64px;
+    padding: 12px;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .app-chat-page__app-info {
+    min-width: 0;
+  }
+
+  .app-chat-page__app-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-chat-page__header-right {
+    flex-wrap: wrap;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .app-chat-page__header-center {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .app-chat-page__view-switcher {
+    display: flex;
+    width: 100%;
+  }
+
+  .app-chat-page__view-switcher :deep(.ant-radio-button-wrapper) {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .app-chat-page__split-option {
+    display: none !important;
+  }
+
+  .app-chat-page__main {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 12px;
+  }
+
+  .app-chat-page__chat,
+  .app-chat-page__preview {
+    width: 100% !important;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .app-chat-page__resizer {
+    display: none;
+  }
+
+  .app-chat-page__preview-header {
+    padding-right: 12px;
+  }
+
+  .app-chat-page__preview-composer {
+    padding: 10px 12px;
   }
 }
 </style>

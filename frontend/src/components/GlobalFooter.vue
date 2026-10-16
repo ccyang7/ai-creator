@@ -1,14 +1,7 @@
 <template>
   <div class="global-footer">
     AI生成平台 by
-    <a
-      class="global-footer__link"
-      href=""
-      target="_blank"
-      rel="noreferrer"
-    >
-      cyyy
-    </a>
+    <span class="global-footer__author">cyyy</span>
   </div>
 </template>
 
@@ -18,7 +11,7 @@
   color: rgba(0, 0, 0, 0.65);
 }
 
-.global-footer__link {
+.global-footer__author {
   margin-left: 4px;
 }
 </style>

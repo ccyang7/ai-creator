@@ -3,12 +3,12 @@
     <!-- 页面头部 -->
     <div class="chat-history-manage-page__header">
       <div class="chat-history-manage-page__header-title">
-        <span class="chat-history-manage-page__header-icon">💬</span>
-        <h1 class="chat-history-manage-page__title">对话管理</h1>
+        <h2 class="chat-history-manage-page__title">对话数据</h2>
       </div>
       <!-- 统计信息 -->
       <div class="chat-history-manage-page__header-stats">
-        <a-statistic title="对话总数" :value="total" :value-style="{ color: '#667eea' }" ></a-statistic>     </div>
+        <a-statistic title="对话总数" :value="total" :value-style="{ color: '#2563eb' }"></a-statistic>
+      </div>
     </div>
 
     <a-card class="chat-history-manage-card">
@@ -180,12 +180,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import type { TablePaginationConfig } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { listAllChatHistoryByPageForAdmin } from '@/api/chatHistoryController'
-
-const router = useRouter()
 
 // ==================== 表格列配置 ====================
 const columns = [
@@ -296,11 +294,13 @@ const resetSearch = () => {
  * 表格分页变化处理
  * @param pag 分页参数
  */
-const doTableChange = (pag: any) => {
-  pagination.current = pag.current
-  pagination.pageSize = pag.pageSize
-  searchParams.pageNum = pag.current
-  searchParams.pageSize = pag.pageSize
+const doTableChange = (pag: TablePaginationConfig) => {
+  const current = pag.current ?? 1
+  const pageSize = pag.pageSize ?? 10
+  pagination.current = current
+  pagination.pageSize = pageSize
+  searchParams.pageNum = current
+  searchParams.pageSize = pageSize
   fetchData()
 }
 
@@ -340,21 +340,18 @@ onMounted(() => {
 
 <style scoped>
 .chat-history-manage-page {
-  padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  min-height: calc(100vh - 64px - 48px);
+  min-height: 0;
 }
 
 .chat-history-manage-page__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
 }
 
 .chat-history-manage-page__header-title {
@@ -365,13 +362,13 @@ onMounted(() => {
 
 .chat-history-manage-page__header-icon {
   font-size: 32px;
-  color: #667eea;
+  color: #2563eb;
 }
 
 .chat-history-manage-page__title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
   margin: 0;
 }
 
@@ -381,14 +378,15 @@ onMounted(() => {
 }
 
 .chat-history-manage-card {
-  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .chat-history-manage-page__search-wrapper {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%);
-  border-radius: 12px;
+  background: #f8fafc;
+  border-radius: 6px;
   margin: -16px -16px 16px;
 }
 
@@ -405,8 +403,8 @@ onMounted(() => {
 }
 
 .chat-history-manage-page__input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .chat-history-manage-page__type-tag {
@@ -428,18 +426,18 @@ onMounted(() => {
 
 :deep(.ant-table) {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 6px;
 }
 
 :deep(.ant-table-thead > tr > th) {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  background: #f8fafc;
   color: #1a1a1a;
   font-weight: 600;
   padding: 14px 16px;
 }
 
 :deep(.ant-table-tbody > tr:hover > td) {
-  background: rgba(102, 126, 234, 0.04);
+  background: rgba(37, 99, 235, 0.04);
 }
 
 :deep(.ant-table-tbody > tr > td) {

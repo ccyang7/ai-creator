@@ -2,11 +2,10 @@
   <div class="app-manage-page">
     <div class="app-manage-page__header">
       <div class="app-manage-page__header-title">
-        <span class="app-manage-page__header-icon">👑</span>
-        <h1 class="app-manage-page__title">应用管理</h1>
+        <h2 class="app-manage-page__title">应用数据</h2>
       </div>
       <div class="app-manage-page__header-stats">
-        <a-statistic title="应用总数" :value="total" :value-style="{ color: '#667eea' }" />
+        <a-statistic title="应用总数" :value="total" :value-style="{ color: '#2563eb' }" />
       </div>
     </div>
 
@@ -49,8 +48,10 @@
                   >MULTI_FILE</span
                 >
               </a-select-option>
-              <a-select-option value="vue">
-                <span class="app-manage-page__type-tag app-manage-page__type-tag--vue">VUE</span>
+              <a-select-option value="vue_project">
+                <span class="app-manage-page__type-tag app-manage-page__type-tag--vue">
+                  VUE_PROJECT
+                </span>
               </a-select-option>
             </a-select>
           </a-form-item>
@@ -105,6 +106,13 @@
             >
               ⭐ 精选
             </a-tag>
+            <a-tag
+              v-else-if="record.priority === 0"
+              color="green"
+              class="app-manage-page__tag app-manage-page__tag--normal"
+            >
+              普通
+            </a-tag>
             <span v-else class="app-manage-page__priority">{{ record.priority || 0 }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'createTime'">
@@ -137,11 +145,19 @@
               >
                 ⭐ 精选
               </a-button>
+              <a-button
+                v-else
+                size="small"
+                class="app-manage-page__action-btn app-manage-page__action-btn--unstar"
+                @click="doCancelFeatured(record)"
+              >
+                取消精选
+              </a-button>
               <a-popconfirm
                 title="确认删除该应用？"
                 ok-text="确认"
                 cancel-text="取消"
-                @confirm="doDelete(record.id!)"
+                @confirm="record.id && doDelete(record.id)"
               >
                 <a-button
                   danger
@@ -163,6 +179,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import type { TablePaginationConfig } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import CodeGenTypeTag from '@/components/CodeGenTypeTag.vue'
 import { adminListAppByPage, adminDeleteApp, adminUpdateApp } from '@/api/appController'
@@ -265,12 +282,14 @@ const resetSearch = () => {
   fetchData()
 }
 
-const doTableChange = (pag: any) => {
+const doTableChange = (pag: TablePaginationConfig) => {
+  const current = pag.current ?? 1
+  const pageSize = pag.pageSize ?? 10
   // 同步更新分页组件和查询参数
-  pagination.current = pag.current
-  pagination.pageSize = pag.pageSize
-  searchParams.pageNum = pag.current
-  searchParams.pageSize = pag.pageSize
+  pagination.current = current
+  pagination.pageSize = pageSize
+  searchParams.pageNum = current
+  searchParams.pageSize = pageSize
   fetchData()
 }
 
@@ -295,7 +314,9 @@ const doDelete = async (id: string) => {
 }
 
 const doEdit = (record: API.AppVO) => {
-  router.push(`/app/edit/${record.id}`)
+  if (record.id) {
+    router.push(`/app/edit/${record.id}`)
+  }
 }
 
 const doSetFeatured = async (record: API.AppVO) => {
@@ -315,6 +336,26 @@ const doSetFeatured = async (record: API.AppVO) => {
   } catch (error) {
     console.error(error)
     message.error('设置失败，请重试')
+  }
+}
+
+const doCancelFeatured = async (record: API.AppVO) => {
+  try {
+    const res = await adminUpdateApp({
+      id: record.id,
+      appName: record.appName,
+      cover: record.cover,
+      priority: 0,
+    })
+    if (res.data.code === 0) {
+      message.success('已取消精选')
+      fetchData()
+    } else {
+      message.error(res.data.message || '取消失败')
+    }
+  } catch (error) {
+    console.error(error)
+    message.error('取消失败，请重试')
   }
 }
 
@@ -342,21 +383,18 @@ onMounted(() => {
 
 <style scoped>
 .app-manage-page {
-  padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  min-height: calc(100vh - 64px - 48px);
+  min-height: 0;
 }
 
 .app-manage-page__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
 }
 
 .app-manage-page__header-title {
@@ -367,13 +405,13 @@ onMounted(() => {
 
 .app-manage-page__header-icon {
   font-size: 32px;
-  color: #667eea;
+  color: #2563eb;
 }
 
 .app-manage-page__title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
   margin: 0;
 }
 
@@ -383,14 +421,15 @@ onMounted(() => {
 }
 
 .app-manage-card {
-  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .app-manage-page__search-wrapper {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%);
-  border-radius: 12px;
+  background: #f8fafc;
+  border-radius: 6px;
   margin: -16px -16px 16px;
 }
 
@@ -407,8 +446,8 @@ onMounted(() => {
 }
 
 .app-manage-page__input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .app-manage-page__type-tag {
@@ -427,6 +466,16 @@ onMounted(() => {
   color: #1677ff;
 }
 
+.app-manage-page__tag--featured {
+  border-color: #faad14;
+  background: rgba(250, 173, 20, 0.1);
+}
+
+.app-manage-page__tag--normal {
+  border-color: #52c41a;
+  background: rgba(82, 196, 26, 0.1);
+}
+
 .app-manage-page__btn {
   border-radius: 8px;
   transition: all 0.3s;
@@ -442,18 +491,18 @@ onMounted(() => {
 
 :deep(.ant-table) {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 6px;
 }
 
 :deep(.ant-table-thead > tr > th) {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  background: #f8fafc;
   color: #1a1a1a;
   font-weight: 600;
   padding: 14px 16px;
 }
 
 :deep(.ant-table-tbody > tr:hover > td) {
-  background: rgba(102, 126, 234, 0.04);
+  background: rgba(37, 99, 235, 0.04);
 }
 
 :deep(.ant-table-tbody > tr > td) {
@@ -467,7 +516,7 @@ onMounted(() => {
 }
 
 .app-manage-page__app-avatar {
-  border: 2px solid rgba(102, 126, 234, 0.2);
+  border: 2px solid rgba(37, 99, 235, 0.2);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -531,6 +580,16 @@ onMounted(() => {
 .app-manage-page__action-btn--star:hover {
   background: rgba(250, 173, 20, 0.1);
   border-color: #faad14;
+}
+
+.app-manage-page__action-btn--unstar {
+  color: #8c8c8c;
+  border-color: rgba(140, 140, 140, 0.3);
+}
+
+.app-manage-page__action-btn--unstar:hover {
+  background: rgba(140, 140, 140, 0.1);
+  border-color: #8c8c8c;
 }
 
 .app-manage-page__action-btn--danger {

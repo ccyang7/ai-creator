@@ -20,7 +20,7 @@ const tagConfig = computed(() => {
   const typeMap: Record<string, { icon: string; text: string; color: string }> = {
     html: { icon: '🌐', text: 'HTML', color: 'green' },
     multi_file: { icon: '📁', text: 'MULTI_FILE', color: 'orange' },
-    vue: { icon: '⚡', text: 'VUE', color: 'blue' },
+    vue_project: { icon: '⚡', text: 'VUE_PROJECT', color: 'blue' },
   }
 
   const config = typeMap[props.type || '']

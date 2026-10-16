@@ -71,6 +71,21 @@ export async function adminUpdateApp(
   })
 }
 
+/** 此处后端没有提供注释 GET /app/build/status */
+export async function getBuildStatus(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getBuildStatusParams,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseAppBuildStatusVO>('/app/build/status', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 GET /app/chat/generate/code */
 export async function chatToGenerateCode(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
