@@ -1,6 +1,13 @@
 spring:
   application:
     name: ai-creator
+  # 禁用 LangChain4j 的 OpenAI 自动配置：其 HttpClientBuilder 强依赖 Spring RestClient，
+  # 而该实现经 HttpComponents 读取 chunked 响应（无 Content-Length）时只会得到 1 字节，
+  # 导致所有 AI 调用解析失败。本项目的模型统一由 org.cy.aicreator.config 下的配置类手工构建
+  # （含其原本提供的 openAiChatModel，见 ChatModelConfig），HTTP 客户端由
+  # langchain4j-http-client-jdk 提供，不依赖此自动配置。
+  autoconfigure:
+    exclude: dev.langchain4j.openai.spring.AutoConfig
   session:
     redis:
       flush-mode: immediate
