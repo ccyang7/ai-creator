@@ -4,10 +4,10 @@
 
 ## 项目与仓库关系
 
-- 本仓库是 AI Creator 的 Vue 前端，绝对路径为 `D:\DevelopProject\ai-creator-frontend`。
-- 对应后端是独立 Git 仓库 `D:\DevelopProject\ai-creator`，后端也有自己的 `AGENTS.md`。
+- 本目录是 AI Creator 的 Vue 前端，位于 monorepo `D:\DevelopProject\ai-creator` 的 `frontend/` 子目录。
+- 对应后端在同一仓库的 `backend/`（绝对路径 `D:\DevelopProject\ai-creator\backend`），后端也有自己的 `AGENTS.md`。
 - 后端负责用户、应用、聊天记录、AI 生成、预览文件、部署、截图和下载；前端负责页面、会话状态、SSE 展示、iframe 预览及可视化元素选择。
-- 两个仓库均使用 `master`。不要假定任一工作区干净，不要覆盖用户未提交的改动。
+- 仓库使用 `master` 分支。不要假定工作区干净，不要覆盖用户未提交的改动。
 - `DEBUG_PREVIEW.md`、`SSE_FIX.md`、`ID_TYPE_FIX.md` 是历史调试记录，存在过期内容，不能代替源码。
 
 ## 技术基线
@@ -111,4 +111,4 @@
 - iframe 消息必须校验 `event.source === previewFrame.contentWindow` 和允许的 origin；发送端也使用明确 targetOrigin。
 - 新增页面时同步路由、导航、权限守卫、加载/空/错误状态及响应式布局。
 - 完成改动至少运行 `npm run type-check` 和 `npm run pure-build`；完整验收优先 `npm run build`。不要以当前已有类型错误为理由忽略新增错误。
-- 稳定的跨端协议发生变化后，同时更新本文件和后端仓库 `D:\DevelopProject\ai-creator\AGENTS.md`。
+- 稳定的跨端协议发生变化后，同时更新本文件和后端 `D:\DevelopProject\ai-creator\backend\AGENTS.md`。
