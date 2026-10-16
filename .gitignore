@@ -1,0 +1,77 @@
+# ============================================================
+# 仓库根目录忽略规则（monorepo）
+#
+# 本文件只负责两件事：
+#   1. 根目录自身产生的文件与目录；
+#   2. 全仓库通用的噪音文件（OS、编辑器、日志）。
+# 各子项目的产物规则由 backend/.gitignore 与 frontend/.gitignore 各自维护。
+#
+# 注意：部分规则刻意用前导 "/" 限定在根目录，理由见各处注释。
+# ============================================================
+
+# ---------- 根目录专属 ----------
+
+# IntelliJ IDEA 本地配置。workspace.xml 含本机绝对路径（Maven settings.xml 位置）
+# 与个人工作区状态，不应进入版本库；两个子项目内的 .idea 由各自规则处理。
+/.idea/
+
+# VS Code 工作区配置。限定根目录，避免屏蔽 frontend/.vscode/extensions.json
+# —— 那是团队有意跟踪的推荐插件列表。
+/.vscode/
+
+# Maven 构建输出。backend 的 target/ 由 backend/.gitignore 负责，其中带
+# !**/src/main/**/target/ 例外，此处不写递归规则以免干扰。
+/target/
+
+# Node 依赖与构建输出（若在根目录执行 npm 操作）
+/node_modules/
+/dist/
+
+# 根目录环境变量文件。只防护根目录：frontend/.env、.env.example、.env.production
+# 是团队有意跟踪的（Vite 的 VITE_* 变量本就随产物公开）。
+/.env
+/.env.local
+/.env.*.local
+
+# ---------- 全仓库通用 ----------
+
+# 操作系统噪音
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# 日志
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE / 编辑器杂项文件（目录级配置见上方「根目录专属」）
+*.iml
+*.iws
+*.ipr
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
+*.bak
+*.orig
+*.rej
+.history/
+
+# 编译产物
+*.class
+
+# 本地临时目录。backend 与 frontend 下均存在，与 backend/.gitignore 的 tmp 规则保持一致。
+tmp/
