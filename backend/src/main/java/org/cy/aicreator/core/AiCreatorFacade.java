@@ -9,6 +9,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.cy.aicreator.ai.AiCodeGeneratorService;
 import org.cy.aicreator.ai.AiCodeGeneratorServiceFactory;
+import org.cy.aicreator.ai.MultiFileCodeCompleter;
 import org.cy.aicreator.ai.model.HtmlCodeResult;
 import org.cy.aicreator.ai.model.MultiFileCodeResult;
 import org.cy.aicreator.ai.model.message.AiResponseMessage;
@@ -36,6 +37,9 @@ public class AiCreatorFacade {
 
     @Resource
     private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
+
+    @Resource
+    private MultiFileCodeCompleter multiFileCodeCompleter;
 
     @Resource
     private VueProjectBuildService vueProjectBuildService;
@@ -99,6 +103,11 @@ public class AiCreatorFacade {
                         // 流式输出完成后，解析代码并保存文件
                         // 代码解析执行器
                         Object execute = CodeParserExecutor.execute(outputType, codeBuilder.toString());
+                        if (execute instanceof MultiFileCodeResult multiFileCodeResult) {
+                            // 多文件模式下模型时常只给 HTML 代码块，缺的 CSS/JS 在这里定向补全，
+                            // 否则会写出一个引用了不存在文件的 index.html（页面没样式，且不报错）
+                            multiFileCodeCompleter.complete(multiFileCodeResult);
+                        }
                         // 代码保存执行器
                         File dir = CodeFileSaverExecutor.executeSaver(execute, outputType, appId);
                         log.info("代码保存成功：{}", dir.getAbsolutePath());
