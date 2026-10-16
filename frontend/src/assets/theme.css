@@ -1,0 +1,41 @@
+:root {
+  --ac-primary: #2563eb;
+  --ac-primary-hover: #1d4ed8;
+  --ac-cyan: #0891b2;
+  --ac-text: #111827;
+  --ac-text-secondary: #64748b;
+  --ac-border: #dbe5f0;
+  --ac-surface: #ffffff;
+  --ac-surface-soft: #f8fbff;
+  --ac-page-bg: #f4f7fb;
+  --ac-page-background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.09), transparent 30rem),
+    radial-gradient(circle at 92% 8%, rgba(8, 145, 178, 0.07), transparent 28rem),
+    var(--ac-page-bg);
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--ac-text);
+  background: var(--ac-page-background);
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
