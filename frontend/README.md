@@ -1,4 +1,6 @@
-# ai-creator-frontend
+# AI Creator 前端
+
+位于 monorepo `ai-creator` 的 `frontend/` 子目录，对应后端在 `backend/`；跨端协议与开发约定见同目录 `AGENTS.md`。
 
 This template should help get you started developing with Vue 3 in Vite.
 
