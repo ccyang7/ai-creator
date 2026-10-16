@@ -7,8 +7,10 @@ import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.cy.aicreator.ai.SmartRoutingService;
 import org.cy.aicreator.ai.SmartRoutingServiceFactory;
+import org.cy.aicreator.config.ScreenshotProperties;
 import org.cy.aicreator.constant.AppConstant;
 import org.cy.aicreator.core.AiCreatorFacade;
 import org.cy.aicreator.core.handler.StreamHandlerExecutor;
@@ -55,6 +57,7 @@ import java.util.stream.Collectors;
  * @since 2026-03-21
  */
 @Service
+@Slf4j
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
     @Resource
@@ -77,10 +80,23 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private VueProjectBuildService vueProjectBuildService;
 
+    @Resource
+    private ScreenshotProperties screenshotProperties;
+
+    /**
+     * 部署站点地址，仅用于对外展示"访问已部署网站"，不参与截图
+     */
     @Value("${code.deploy-host:http://localhost}")
     private String deployHost;
 
+    /**
+     * 本应用自身的监听端口与 context path，用于推导封面截图的源地址
+     */
+    @Value("${server.port:8200}")
+    private int selfPort;
 
+    @Value("${server.servlet.context-path:}")
+    private String selfContextPath;
 
     /**
      * 创建应用
@@ -424,34 +440,67 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新部署信息失败");
 
 
-        // 10. 构建应用访问 URL
+        // 10. 构建应用访问 URL（对外展示的部署地址，与截图源无关）
         String appDeployUrl = String.format("%s/%s/",deployHost, deployKey);
         // 11. 异步生成截图并更新应用封面
-        takeScreenshotAsync(appId, appDeployUrl);
+        takeScreenshotAsync(appId, buildScreenshotUrl(app, deployKey));
         return appDeployUrl;
 
     }
 
-
-
+    /**
+     * 组装封面截图的源地址
+     * <p>
+     * 默认走本应用的静态资源接口，把 nginx 与公网从截图链路里摘掉：内容与部署副本一致
+     * （Vue 工程两边取的都是 dist），但少了一跳外部依赖。配置成 DEPLOY 时改走部署站点，
+     * 截图结果与用户实际访问的地址完全一致，代价是依赖 nginx 与网络可达。
+     * </p>
+     *
+     * @param app       应用
+     * @param deployKey 部署标识，仅 DEPLOY 源使用
+     */
+    private String buildScreenshotUrl(App app, String deployKey) {
+        if (ScreenshotProperties.Source.DEPLOY == screenshotProperties.getSource()) {
+            return String.format("%s/%s/", deployHost, deployKey);
+        }
+        String baseUrl = screenshotProperties.getPreviewBaseUrl();
+        if (StrUtil.isBlank(baseUrl)) {
+            baseUrl = String.format("http://localhost:%d%s", selfPort, StrUtil.nullToEmpty(selfContextPath));
+        }
+        return String.format("%s/static/%s_%d/", StrUtil.removeSuffix(baseUrl, "/"), app.getCodeGenType(), app.getId());
+    }
 
     /**
      * 异步生成应用截图并更新封面
+     * <p>
+     * 截图是部署的非关键路径：失败只记录日志，不影响应用的部署结果与可用性，
+     * 前端会退回按生成类型展示的占位图。
+     * </p>
      *
-     * @param appId  应用ID
-     * @param appUrl 应用访问URL
+     * @param appId         应用ID
+     * @param screenshotUrl 截图源地址
      */
-    public void takeScreenshotAsync(Long appId, String appUrl) {
-        // 使用虚拟线程异步执行
+    public void takeScreenshotAsync(Long appId, String screenshotUrl) {
+        if (!screenshotProperties.isEnabled()) {
+            log.info("封面截图已关闭，跳过：appId={}", appId);
+            return;
+        }
+        // 使用虚拟线程异步执行，不阻塞部署接口的返回
         Thread.startVirtualThread(() -> {
-            // 调用截图服务生成截图并上传
-            String screenshotUrl = screenshotService.takeScreenshot(appUrl);
-            // 更新应用封面字段
-            App updateApp = new App();
-            updateApp.setId(appId);
-            updateApp.setCover(screenshotUrl);
-            boolean updated = this.updateById(updateApp);
-            ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "更新应用封面字段失败");
+            try {
+                // 调用截图服务生成截图并上传，失败时抛出业务异常
+                String coverUrl = screenshotService.takeScreenshot(screenshotUrl);
+                // 更新应用封面字段
+                App updateApp = new App();
+                updateApp.setId(appId);
+                updateApp.setCover(coverUrl);
+                if (!this.updateById(updateApp)) {
+                    log.error("更新应用封面字段失败：appId={}, cover={}", appId, coverUrl);
+                }
+            } catch (Exception e) {
+                // 虚拟线程里漏出的异常没人接，必须在这里兜住
+                log.error("生成应用封面失败，应用仍可正常访问：appId={}, 截图源={}", appId, screenshotUrl, e);
+            }
         });
     }
 
