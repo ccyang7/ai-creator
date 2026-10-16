@@ -4,6 +4,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import jakarta.annotation.Resource;
 import lombok.Data;
+import org.cy.aicreator.aimonitor.AiMonitorListener;
 import org.cy.aicreator.monitor.MonitorListener;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +27,9 @@ public class ChatModelConfig {
 
     @Resource
     private MonitorListener monitorListener;
+
+    @Resource
+    private AiMonitorListener aiMonitorListener;
 
     private String baseUrl;
 
@@ -57,7 +61,7 @@ public class ChatModelConfig {
                 .temperature(temperature)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
-                .listeners(List.of(monitorListener));
+                .listeners(List.of(monitorListener, aiMonitorListener));
         if (readTimeout != null) {
             builder.timeout(Duration.ofSeconds(readTimeout));
         }

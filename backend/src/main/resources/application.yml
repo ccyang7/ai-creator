@@ -45,6 +45,20 @@ server:
       cookie:
         max-age: 3600
 
+# AI 监控平台上报（完整参数见 AiMonitorProperties）
+# base-url 与 api-key 是凭据：放在 application-local.yml / application-prod.yml（均被 .gitignore 忽略），
+# 或由运行环境注入环境变量，不要写进本文件。两者任一为空时整条上报链路静默跳过，模型调用照常进行。
+ai-monitor:
+  enabled: true
+  base-url: ${AI_MONITOR_BASE_URL:}
+  api-key: ${AI_MONITOR_API_KEY:}
+  # 服务提供方标识，平台按它分组统计
+  provider: deepseek
+  # 是否上报提问与回答正文。关掉后平台详情抽屉里看不到内容，但正文不会离开本服务
+  report-content: true
+  # 正文上报前的截断长度。生成链路的系统提示词很长，没必要全量发过去
+  input-max-length: 2000
+  output-max-length: 4000
 # springdoc-openapi
 springdoc:
   group-configs:
